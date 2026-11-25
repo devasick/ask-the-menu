@@ -4,9 +4,9 @@ A multi-tenant RAG service that answers diners' questions about one restaurant's
 ("What's vegan and under €15?", "Enthält das Korma Nüsse?"), grounded only in that
 restaurant's data. Built as a standalone service that [MenuNow](https://menunow.de) talks to over HTTP.
 
-> **Status: MVP step 2 of 7 (ingestion).** Schema, migrations, seed data, health check, the
-> provider-agnostic LLM client and `POST /ingest` are in place. Retrieval, generation,
-> analytics, evals and the widget follow. The full README (architecture, design decisions, eval results) lands in step 7.
+> **Status: MVP step 3 of 7 (retrieval).** Schema, ingestion, the provider-agnostic LLM client,
+> the rules-first query parser (EN/DE), the SQL route and hybrid search (pgvector + full text,
+> RRF) are in place. Generation, analytics, evals and the widget follow. The full README (architecture, design decisions, eval results) lands in step 7.
 
 ## Quick start
 

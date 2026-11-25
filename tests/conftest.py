@@ -42,3 +42,19 @@ async def sessionmaker(engine: AsyncEngine) -> AsyncIterator[async_sessionmaker[
     yield make_sessionmaker(engine)
     async with engine.begin() as conn:
         await conn.execute(text("TRUNCATE restaurants CASCADE"))
+
+
+@pytest.fixture
+async def seeded(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """Both seed restaurants ingested with the fake LLM client."""
+    from app.ingest.pipeline import ingest_menu
+    from app.llm.fake import FakeLLMClient
+    from app.seed import load_payload
+
+    llm = FakeLLMClient()
+    for name in ("curry_house.json", "pizzeria_finta.json"):
+        async with sessionmaker() as session, session.begin():
+            await ingest_menu(session, llm, load_payload(ROOT / "seed" / name))
+    yield sessionmaker
