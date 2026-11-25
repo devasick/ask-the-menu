@@ -18,7 +18,7 @@ from evals.metrics import (
     percentile,
     reciprocal_rank,
 )
-from evals.run import report, run_eval
+from evals.run import report, run_eval, update_readme
 
 ROOT = Path(__file__).resolve().parent.parent
 DATASET = ROOT / "evals/datasets/curry_house.jsonl"
@@ -111,3 +111,11 @@ async def test_offline_eval_passes_safety_gates(
     assert metrics["Cross-tenant leakage"].value == 0
     assert metrics["Route accuracy"].value == 1.0
     assert "# Eval results" in report(settings, llm, results, DATASET)
+
+
+def test_readme_table_is_replaced_between_markers(tmp_path: Path) -> None:
+    readme = tmp_path / "README.md"
+    readme.write_text("intro\n<!-- eval:start -->\nold\n<!-- eval:end -->\nend\n")
+    update_readme(readme, "| new |")
+    assert readme.read_text() == "intro\n<!-- eval:start -->\n| new |\n<!-- eval:end -->\nend\n"
+    assert "<!-- eval:start -->" in (ROOT / "README.md").read_text(encoding="utf-8")
