@@ -157,6 +157,8 @@ class QueryLog(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False)
     route_taken: Mapped[str] = mapped_column(String(16), nullable=False)
     cited_item_ids: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    # False when the guest got no items and no confident answer ("questions with no result").
+    has_result: Mapped[bool] = mapped_column(nullable=False, default=True)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

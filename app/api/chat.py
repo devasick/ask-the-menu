@@ -1,4 +1,6 @@
 import hmac
+import logging
+import time
 import uuid
 from decimal import Decimal
 from typing import Annotated, Literal
@@ -9,16 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ingest import get_llm
 from app.config import Settings
-from app.db.models import Restaurant
+from app.db.models import QueryLog, Restaurant
 from app.db.session import get_session
-from app.generation.generate import ChatAnswer, answer_question
+from app.generation.generate import ChatAnswer, add_usage, answer_question
 from app.ingest.schemas import has_allergen_data
-from app.llm.base import LLMClient
+from app.llm.base import LLMClient, Usage
+from app.llm.tracing import request_trace
 from app.retrieval.rerank import Reranker
 from app.retrieval.router import RouteContext, parse_question, route_question
 from app.retrieval.sql_search import ItemHit
 from app.security.auth import get_settings, hash_widget_key
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
@@ -97,6 +101,7 @@ async def _authorized_restaurant(
 
 @router.post("/chat")
 async def chat(
+    request: Request,
     body: ChatRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     llm: Annotated[LLMClient, Depends(get_llm)],
@@ -105,8 +110,53 @@ async def chat(
     x_widget_key: Annotated[str | None, Header()] = None,
 ) -> ChatResponse:
     restaurant = await _authorized_restaurant(session, body.restaurant_id, x_widget_key)
-    # parse_usage is recorded with the query log (step 5).
-    parsed, _parse_usage = await parse_question(llm, body.question, body.language)
-    result = await route_question(RouteContext(session, llm, reranker, restaurant.id, parsed))
-    answer = await answer_question(llm, settings, restaurant.name, result)
-    return ChatResponse.of(answer)
+    started = time.perf_counter()
+    trace_fields = {
+        "name": "chat",
+        "session_id": body.session_id,
+        "input": body.question,
+        "metadata": {"restaurant_id": str(restaurant.id)},
+    }
+    with request_trace(request.app.state.langfuse, **trace_fields) as trace:
+        parsed, parse_usage = await parse_question(llm, body.question, body.language)
+        result = await route_question(RouteContext(session, llm, reranker, restaurant.id, parsed))
+        answer = await answer_question(llm, settings, restaurant.name, result)
+        response = ChatResponse.of(answer)
+        if trace is not None:
+            try:
+                trace.update(output=response.answer, metadata={"route": answer.route})
+            except Exception:  # tracing is best effort
+                log.debug("langfuse trace update failed", exc_info=True)
+    latency_ms = round((time.perf_counter() - started) * 1000)
+    await _log_query(session, restaurant.id, body.question, answer, parse_usage, latency_ms)
+    return response
+
+
+async def _log_query(
+    session: AsyncSession,
+    restaurant_id: uuid.UUID,
+    question: str,
+    answer: ChatAnswer,
+    parse_usage: Usage,
+    latency_ms: int,
+) -> None:
+    """Best effort: a failed analytics write must not fail the guest's answer."""
+    usage = add_usage(parse_usage, answer.usage)
+    session.add(
+        QueryLog(
+            restaurant_id=restaurant_id,
+            question=question,
+            route_taken=answer.route,
+            cited_item_ids=[i.external_id for i in answer.items],
+            has_result=bool(answer.items) or answer.confidence == "high",
+            latency_ms=latency_ms,
+            tokens_in=usage.tokens_in,
+            tokens_out=usage.tokens_out,
+            cost_usd=usage.cost_usd,
+        )
+    )
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        log.exception("query log write failed")

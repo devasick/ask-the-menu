@@ -50,7 +50,7 @@ class ChatAnswer:
     model_alias: Alias | None = None
 
 
-def _add(a: Usage, b: Usage) -> Usage:
+def add_usage(a: Usage, b: Usage) -> Usage:
     return Usage(a.tokens_in + b.tokens_in, a.tokens_out + b.tokens_out, a.cost_usd + b.cost_usd)
 
 
@@ -68,7 +68,8 @@ async def answer_question(
             route=result.route,
             sources=[Source("menu_item", i.external_id) for i in result.items],
             disclaimer=disclaimer,
-            confidence="high",
+            # An empty SQL listing is a "no result"; cache/FAQ answers stand without items.
+            confidence="high" if result.items or result.route != "sql" else "low",
             usage=result.usage,
             generated=False,
         )
@@ -99,7 +100,7 @@ async def answer_question(
         except LLMError as exc:
             log.warning("generation failed: %s", exc)
             break
-        usage = _add(usage, reply.usage)
+        usage = add_usage(usage, reply.usage)
         answered_by = reply.alias
         try:
             generated = GeneratedAnswer.model_validate(json.loads(reply.text))
