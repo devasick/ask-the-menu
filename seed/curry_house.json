@@ -1,0 +1,731 @@
+{
+  "restaurant": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "slug": "curry-house",
+    "name": "The Curry House",
+    "default_language": "de",
+    "monthly_budget_usd": "10.00",
+    "info": "The Curry House is a fictional demo restaurant serving North and South Indian dishes at Musterstraße 1, 10115 Berlin. Most curries are cooked to order, and the spice level of many dishes can be adjusted on request."
+  },
+  "items": [
+    {
+      "external_id": "cs-01",
+      "name": "Vegetable Samosa",
+      "description": "Two crisp pastries filled with spiced potato and green peas, served with tamarind chutney.",
+      "category": "Starters",
+      "price_cents": 550,
+      "currency": "EUR",
+      "allergens": [
+        "gluten"
+      ],
+      "dietary_tags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cs-02",
+      "name": "Onion Bhaji",
+      "description": "Onion fritters in a light chickpea-flour batter with cumin and fresh coriander.",
+      "category": "Starters",
+      "price_cents": 490,
+      "currency": "EUR",
+      "allergens": [],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cs-03",
+      "name": "Paneer Tikka",
+      "description": "Cubes of Indian cottage cheese marinated in yoghurt and spices, grilled in the tandoor with peppers and onion.",
+      "category": "Starters",
+      "price_cents": 890,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "mustard"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "spicy",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cs-04",
+      "name": "Chicken Tikka Starter",
+      "description": "Boneless chicken thigh marinated in yoghurt, ginger and Kashmiri chilli, cooked in the tandoor.",
+      "category": "Starters",
+      "price_cents": 950,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "mustard"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cs-05",
+      "name": "Tandoori Prawns",
+      "description": "King prawns marinated in yoghurt, garlic and carom seeds, charred in the clay oven.",
+      "category": "Starters",
+      "price_cents": 1290,
+      "currency": "EUR",
+      "allergens": [
+        "crustaceans",
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cs-06",
+      "name": "Papadum Basket",
+      "description": "Crispy lentil wafers with mango, mint and lime pickle chutneys.",
+      "category": "Starters",
+      "price_cents": 390,
+      "currency": "EUR",
+      "allergens": [
+        "mustard"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cs-07",
+      "name": "Lamb Seekh Kebab",
+      "description": "Minced lamb skewers with green chilli, mint and garam masala from the tandoor.",
+      "category": "Starters",
+      "price_cents": 1090,
+      "currency": "EUR",
+      "allergens": null,
+      "dietary_tags": [
+        "halal",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-01",
+      "name": "Chicken Tikka Masala",
+      "description": "Tandoori chicken in a creamy tomato and fenugreek sauce with cashew paste.",
+      "category": "Curries",
+      "price_cents": 1590,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-02",
+      "name": "Butter Chicken",
+      "description": "Slow-cooked chicken in a mild buttery tomato sauce finished with cream and honey.",
+      "category": "Curries",
+      "price_cents": 1650,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-03",
+      "name": "Chicken Korma",
+      "description": "Mild curry of chicken in a velvety sauce of cashews, almonds, cream and cardamom.",
+      "category": "Curries",
+      "price_cents": 1550,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-04",
+      "name": "Lamb Rogan Josh",
+      "description": "Kashmiri-style braised lamb with tomato, fennel and aromatic red chilli.",
+      "category": "Curries",
+      "price_cents": 1790,
+      "currency": "EUR",
+      "allergens": [],
+      "dietary_tags": [
+        "gluten_free",
+        "halal",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-05",
+      "name": "Lamb Vindaloo",
+      "description": "Our hottest curry: lamb in a fiery Goan sauce of chilli, vinegar, garlic and mustard seeds.",
+      "category": "Curries",
+      "price_cents": 1790,
+      "currency": "EUR",
+      "allergens": [
+        "mustard"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-06",
+      "name": "Goan Fish Curry",
+      "description": "Fillet of white fish simmered in coconut milk with tamarind, curry leaves and chilli.",
+      "category": "Curries",
+      "price_cents": 1850,
+      "currency": "EUR",
+      "allergens": [
+        "fish",
+        "mustard"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "spicy"
+      ],
+      "is_available": false,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-07",
+      "name": "Palak Paneer",
+      "description": "Indian cottage cheese in a smooth spinach sauce with garlic and ginger.",
+      "category": "Curries",
+      "price_cents": 1390,
+      "currency": "EUR",
+      "allergens": [
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-08",
+      "name": "Chana Masala",
+      "description": "Chickpeas cooked with onion, tomato, green chilli and dried mango powder.",
+      "category": "Curries",
+      "price_cents": 1190,
+      "currency": "EUR",
+      "allergens": [],
+      "dietary_tags": [
+        "gluten_free",
+        "spicy",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-09",
+      "name": "Dal Tadka",
+      "description": "Yellow lentils tempered with cumin, garlic, mustard seeds and dried red chilli.",
+      "category": "Curries",
+      "price_cents": 1090,
+      "currency": "EUR",
+      "allergens": [
+        "mustard"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-10",
+      "name": "Dal Makhani",
+      "description": "Black lentils and kidney beans slow-cooked overnight with butter and cream.",
+      "category": "Curries",
+      "price_cents": 1250,
+      "currency": "EUR",
+      "allergens": [
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-11",
+      "name": "Vegetable Korma",
+      "description": "Seasonal vegetables in a mild cashew and cream sauce with saffron.",
+      "category": "Curries",
+      "price_cents": 1290,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-12",
+      "name": "Baingan Bharta",
+      "description": "Smoky fire-roasted aubergine mashed with onion, tomato and green chilli.",
+      "category": "Curries",
+      "price_cents": 1250,
+      "currency": "EUR",
+      "allergens": null,
+      "dietary_tags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-13",
+      "name": "Malai Kofta",
+      "description": "Paneer and potato dumplings in a rich, mildly sweet cashew and tomato sauce.",
+      "category": "Curries",
+      "price_cents": 1450,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "cu-14",
+      "name": "Chicken Chettinad",
+      "description": "South Indian chicken curry with black pepper, star anise, coconut and curry leaves.",
+      "category": "Curries",
+      "price_cents": 1690,
+      "currency": "EUR",
+      "allergens": null,
+      "dietary_tags": [
+        "halal",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "bi-01",
+      "name": "Chicken Biryani",
+      "description": "Fragrant basmati rice layered with spiced chicken, fried onions and saffron, served with raita.",
+      "category": "Biryanis",
+      "price_cents": 1690,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "bi-02",
+      "name": "Lamb Biryani",
+      "description": "Dum-cooked basmati rice with tender lamb, mint, saffron and toasted almonds, served with raita.",
+      "category": "Biryanis",
+      "price_cents": 1890,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "halal"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "bi-03",
+      "name": "Vegetable Biryani",
+      "description": "Basmati rice with seasonal vegetables, whole spices and cashews, served with coconut raita.",
+      "category": "Biryanis",
+      "price_cents": 1390,
+      "currency": "EUR",
+      "allergens": [
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "bi-04",
+      "name": "Prawn Biryani",
+      "description": "Basmati rice with king prawns, green chilli and coriander, served with raita.",
+      "category": "Biryanis",
+      "price_cents": 1990,
+      "currency": "EUR",
+      "allergens": [
+        "crustaceans",
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "spicy"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "br-01",
+      "name": "Plain Naan",
+      "description": "Soft leavened flatbread baked in the tandoor.",
+      "category": "Breads",
+      "price_cents": 290,
+      "currency": "EUR",
+      "allergens": [
+        "gluten",
+        "milk"
+      ],
+      "dietary_tags": [
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "br-02",
+      "name": "Garlic Naan",
+      "description": "Tandoor-baked naan brushed with garlic butter and coriander.",
+      "category": "Breads",
+      "price_cents": 350,
+      "currency": "EUR",
+      "allergens": [
+        "gluten",
+        "milk"
+      ],
+      "dietary_tags": [
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "br-03",
+      "name": "Peshwari Naan",
+      "description": "Sweet naan stuffed with coconut, almonds and raisins.",
+      "category": "Breads",
+      "price_cents": 420,
+      "currency": "EUR",
+      "allergens": [
+        "gluten",
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "br-04",
+      "name": "Tandoori Roti",
+      "description": "Wholewheat flatbread from the clay oven, made without dairy.",
+      "category": "Breads",
+      "price_cents": 250,
+      "currency": "EUR",
+      "allergens": [
+        "gluten"
+      ],
+      "dietary_tags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "sd-01",
+      "name": "Basmati Rice",
+      "description": "Steamed long-grain basmati rice.",
+      "category": "Sides",
+      "price_cents": 350,
+      "currency": "EUR",
+      "allergens": [],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "sd-02",
+      "name": "Cucumber Raita",
+      "description": "Cool yoghurt with cucumber, roasted cumin and mint.",
+      "category": "Sides",
+      "price_cents": 350,
+      "currency": "EUR",
+      "allergens": [
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "de-01",
+      "name": "Gulab Jamun",
+      "description": "Warm milk dumplings soaked in rose and cardamom syrup.",
+      "category": "Desserts",
+      "price_cents": 550,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "gluten"
+      ],
+      "dietary_tags": [
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "de-02",
+      "name": "Mango Kulfi",
+      "description": "Traditional Indian ice cream with Alphonso mango and pistachio.",
+      "category": "Desserts",
+      "price_cents": 590,
+      "currency": "EUR",
+      "allergens": [
+        "milk",
+        "nuts"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "de-03",
+      "name": "Kheer",
+      "description": "Creamy rice pudding with cardamom and saffron.",
+      "category": "Desserts",
+      "price_cents": 550,
+      "currency": "EUR",
+      "allergens": null,
+      "dietary_tags": [
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "de-04",
+      "name": "Coconut Mango Sorbet",
+      "description": "Dairy-free sorbet of coconut and Alphonso mango.",
+      "category": "Desserts",
+      "price_cents": 590,
+      "currency": "EUR",
+      "allergens": [],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "dr-01",
+      "name": "Mango Lassi",
+      "description": "Chilled yoghurt drink blended with Alphonso mango.",
+      "category": "Drinks",
+      "price_cents": 450,
+      "currency": "EUR",
+      "allergens": [
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "dr-02",
+      "name": "Masala Chai",
+      "description": "Black tea brewed with milk, ginger, cardamom and cinnamon.",
+      "category": "Drinks",
+      "price_cents": 350,
+      "currency": "EUR",
+      "allergens": [
+        "milk"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "dr-03",
+      "name": "Kingfisher Beer 0.33 l",
+      "description": "Indian lager.",
+      "category": "Drinks",
+      "price_cents": 450,
+      "currency": "EUR",
+      "allergens": [
+        "gluten"
+      ],
+      "dietary_tags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "dr-04",
+      "name": "Fresh Lime Soda",
+      "description": "Fresh lime juice with soda water, served sweet or salted.",
+      "category": "Drinks",
+      "price_cents": 390,
+      "currency": "EUR",
+      "allergens": [],
+      "dietary_tags": [
+        "gluten_free",
+        "vegan",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    },
+    {
+      "external_id": "dr-05",
+      "name": "House Red Wine 0.2 l",
+      "description": "Dry red wine from the Pfalz.",
+      "category": "Drinks",
+      "price_cents": 590,
+      "currency": "EUR",
+      "allergens": [
+        "sulphites"
+      ],
+      "dietary_tags": [
+        "gluten_free",
+        "vegetarian"
+      ],
+      "is_available": true,
+      "language": "en"
+    }
+  ],
+  "faqs": [
+    {
+      "question": "What are your opening hours?",
+      "answer": "We are open Tuesday to Sunday from 12:00 to 15:00 and from 17:30 to 22:30. We are closed on Mondays."
+    },
+    {
+      "question": "Do you deliver?",
+      "answer": "Yes, we deliver within 5 km of the restaurant from 17:30 to 22:00. The minimum order is 20 EUR and delivery is free above 35 EUR, otherwise 2.50 EUR."
+    },
+    {
+      "question": "Which payment methods do you accept?",
+      "answer": "We accept cash, EC/girocard, Visa, Mastercard, Apple Pay and Google Pay. Orders placed online can also be paid with PayPal."
+    },
+    {
+      "question": "Can I make a reservation?",
+      "answer": "Yes. Reservations can be made by phone or through the reservation link on our menu page. Tables are held for 15 minutes past the booking time."
+    },
+    {
+      "question": "Do you offer takeaway?",
+      "answer": "Yes, every dish on the menu is available for pickup. Order at the counter or online and collect it about 20 minutes later."
+    },
+    {
+      "question": "Can you cater for groups or events?",
+      "answer": "We host groups of up to 40 guests and offer set menus from 29 EUR per person. Please contact us at least one week in advance."
+    },
+    {
+      "question": "Can you guarantee a dish is completely free of an allergen?",
+      "answer": "Our kitchen handles nuts, gluten, milk and other allergens, so we cannot rule out traces. Please tell our staff about any allergy before ordering."
+    },
+    {
+      "question": "Do you have high chairs and children's portions?",
+      "answer": "Yes, we have high chairs, and most curries can be ordered as a smaller children's portion for 60 percent of the price."
+    }
+  ]
+}
