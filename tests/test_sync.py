@@ -50,8 +50,7 @@ async def test_sync_is_idempotent(sessionmaker: Maker) -> None:
     result = await _sync(sessionmaker, CURRY)
     after = {k: (v.id, v.updated_at) for k, v in (await _items(sessionmaker, CURRY)).items()}
     assert after == before
-    assert result.items_deleted == 0
-    assert result.faqs_deleted == 0
+    assert not result.changed
 
 
 async def test_sync_updates_changed_and_deletes_removed_items(sessionmaker: Maker) -> None:
