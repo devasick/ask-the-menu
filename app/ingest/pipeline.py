@@ -22,6 +22,7 @@ from app.ingest.chunk import ChunkSpec, content_hash, faq_chunk, info_chunk, ite
 from app.ingest.embed import embed_texts
 from app.ingest.schemas import MenuPayload
 from app.llm.base import LLMClient
+from app.security.auth import hash_widget_key
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,8 @@ async def sync_menu(session: AsyncSession, payload: MenuPayload) -> SyncResult:
         "default_language": r.default_language,
         "monthly_budget_usd": r.monthly_budget_usd,
     }
+    if r.widget_key is not None:
+        profile["widget_key_hash"] = hash_widget_key(r.widget_key)
     await session.execute(
         insert(Restaurant)
         .values(id=r.id, menu_version=0, **profile)

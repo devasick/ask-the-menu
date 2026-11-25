@@ -45,10 +45,10 @@ def item_filter_clauses(filters: QueryFilters) -> list[ColumnElement[bool]]:
     if filters.exclude_dietary:
         clauses.append(not_(MenuItem.dietary_tags.overlap(sorted(filters.exclude_dietary))))
     if filters.exclude_allergens:
-        # Unknown allergen data is never "free of" anything.
+        # Unknown (NULL or empty) allergen data is never "free of" anything.
         clauses.append(
             and_(
-                MenuItem.allergens.isnot(None),
+                func.cardinality(MenuItem.allergens) > 0,
                 not_(MenuItem.allergens.overlap(sorted(filters.exclude_allergens))),
             )
         )

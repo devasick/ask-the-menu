@@ -2,7 +2,7 @@
 
 import uuid
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, TypeGuard
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -30,6 +30,11 @@ DIETARY_TAGS = frozenset({"vegan", "vegetarian", "gluten_free", "halal", "spicy"
 Language = Literal["en", "de"]
 
 
+def has_allergen_data(allergens: list[str] | None) -> TypeGuard[list[str]]:
+    """Only a non-empty list is usable allergen data. Missing or empty means: ask staff."""
+    return bool(allergens)
+
+
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -42,6 +47,8 @@ class RestaurantInfo(_Strict):
     monthly_budget_usd: Decimal = Field(default=Decimal("10.00"), ge=0)
     # Free text (address, cuisine, story). Becomes the `info` chunk at ingestion.
     info: str = ""
+    # Public per-restaurant key the chat widget sends. Stored hashed; omit to keep the current one.
+    widget_key: str | None = Field(default=None, min_length=16, max_length=200)
 
 
 class MenuItemIn(_Strict):
@@ -51,7 +58,7 @@ class MenuItemIn(_Strict):
     category: str = Field(min_length=1, max_length=80)
     price_cents: int = Field(ge=0)
     currency: str = Field(default="EUR", pattern=r"^[A-Z]{3}$")
-    # None = unknown (never guess). [] = contains none of the 14 EU allergens.
+    # Missing or [] = unknown: the guest is told to ask staff (see has_allergen_data).
     allergens: list[str] | None
     dietary_tags: list[str] = Field(default_factory=list)
     is_available: bool = True

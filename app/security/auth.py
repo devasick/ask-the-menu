@@ -1,5 +1,6 @@
 """API key checks. Constant-time comparison; keys never appear in logs or errors."""
 
+import hashlib
 import hmac
 from typing import Annotated
 
@@ -33,3 +34,7 @@ def require_admin_key(
     x_api_key: Annotated[str | None, Header()] = None,
 ) -> None:
     _check(x_api_key, settings.admin_api_key)
+
+
+def hash_widget_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()

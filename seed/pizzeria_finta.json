@@ -5,7 +5,8 @@
     "name": "Pizzeria Finta",
     "default_language": "de",
     "monthly_budget_usd": "5.00",
-    "info": "Pizzeria Finta ist ein fiktives Demo-Restaurant für Tests der Mandantentrennung."
+    "info": "Pizzeria Finta ist ein fiktives Demo-Restaurant für Tests der Mandantentrennung.",
+    "widget_key": "demo-widget-key-pizzeria-finta"
   },
   "items": [
     {
