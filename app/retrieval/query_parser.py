@@ -328,8 +328,11 @@ def _parse_allergens(text: str) -> tuple[set[str], set[str], list[tuple[int, int
         **MULTI_ALLERGEN_TERMS,
     }
     for term in sorted(vocab, key=len, reverse=True):
-        # "nut-free", "nussfrei", "laktosefrei", "lactose-free"
-        free = rf"(?<![\w-]){re.escape(term)}(?:-free|-frei|frei|freie|freies|freien)(?![\w-])"
+        # "nut-free", "nussfrei", "lactose-free", "nut allergy", "Nussallergie"
+        free = (
+            rf"(?<![\w-]){re.escape(term)}(?:-free|-frei|frei|freie|freies|freien|"
+            rf"-?allergie|-?unverträglichkeit|\s+(?:allergy|allergies|intolerance))(?![\w-])"
+        )
         for m in re.finditer(free, text):
             excluded |= vocab[term]
             mentioned |= vocab[term]

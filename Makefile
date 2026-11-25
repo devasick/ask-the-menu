@@ -1,4 +1,4 @@
-.PHONY: up down seed migrate test lint typecheck fmt
+.PHONY: up down seed migrate test eval lint typecheck fmt
 
 up:  ## build and start app, postgres and langfuse
 	test -f .env || cp .env.example .env
@@ -16,12 +16,15 @@ seed:  ## load seed/*.json into the running stack
 test:  ## needs Docker for testcontainers, no API keys
 	uv run pytest
 
+eval:  ## run the eval set against DATABASE_URL (re-seeds the demo restaurants); ARGS=--judge
+	uv run python -m evals.run $(ARGS)
+
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
 
 typecheck:
-	uv run mypy app tests
+	uv run mypy app tests evals
 
 fmt:
 	uv run ruff format .
