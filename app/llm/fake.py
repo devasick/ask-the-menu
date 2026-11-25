@@ -13,9 +13,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
+from app.config import ModelPrice
 from app.db.models import EMBEDDING_DIM
 from app.llm.aliases import Alias
-from app.llm.base import ChatResult, EmbedResult, Message, Usage
+from app.llm.base import ChatResult, EmbedResult, Message, Usage, compute_cost
 
 Responder = Callable[[Alias, list[Message], dict[str, Any] | None], str]
 _WORD = re.compile(r"\w+", re.UNICODE)
@@ -41,6 +42,13 @@ def fake_embedding(text: str, dim: int = EMBEDDING_DIM) -> list[float]:
 class FakeLLMClient:
     responder: Responder = _default_responder
     calls: list[tuple[str, Alias, Any]] = field(default_factory=list)
+    # Optional, so tests can check cost tracking; empty means every call costs 0.
+    prices: dict[str, ModelPrice] = field(default_factory=dict)
+
+    def _cost(self, model: str, tokens_in: int, tokens_out: int) -> Decimal:
+        if not self.prices:
+            return Decimal(0)
+        return compute_cost(self.prices, model, tokens_in, tokens_out)
 
     async def chat(
         self,
@@ -54,8 +62,10 @@ class FakeLLMClient:
         self.calls.append(("chat", alias, messages))
         text = self.responder(alias, messages, json_schema)
         tokens_in = sum(len(m["content"].split()) for m in messages)
-        usage = Usage(tokens_in, len(text.split()), Decimal(0))
-        return ChatResult(text=text, alias=alias, model=self.model_id(alias), usage=usage)
+        tokens_out = len(text.split())
+        model = self.model_id(alias)
+        usage = Usage(tokens_in, tokens_out, self._cost(model, tokens_in, tokens_out))
+        return ChatResult(text=text, alias=alias, model=model, usage=usage)
 
     def model_id(self, alias: Alias) -> str:
         return f"fake-{alias}"
