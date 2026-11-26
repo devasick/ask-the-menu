@@ -1,6 +1,7 @@
 """The one LLM interface the rest of the app uses. Provider code lives only in providers.py."""
 
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Literal, Protocol, TypedDict
@@ -52,6 +53,15 @@ class LLMClient(Protocol):
         json_schema: dict[str, Any] | None = None,
         stream: bool = False,
     ) -> ChatResult: ...
+
+    def chat_stream(
+        self,
+        alias: Alias,
+        messages: list[Message],
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[str | ChatResult]:
+        """Yields text deltas as they arrive, then exactly one final ChatResult."""
+        ...
 
     async def embed(self, alias: Alias, texts: list[str]) -> EmbedResult: ...
 

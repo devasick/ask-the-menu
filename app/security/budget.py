@@ -2,6 +2,7 @@
 (rules parser, SQL route, keyword search, item cards) instead of failing."""
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -53,6 +54,15 @@ class SearchOnlyLLM:
         stream: bool = False,
     ) -> ChatResult:
         raise LLMError("search-only mode: monthly budget reached")
+
+    async def chat_stream(
+        self,
+        alias: Alias,
+        messages: list[Message],
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[str | ChatResult]:
+        raise LLMError("search-only mode: monthly budget reached")
+        yield ""  # makes this an async generator
 
     async def embed(self, alias: Alias, texts: list[str]) -> EmbedResult:
         raise LLMError("search-only mode: monthly budget reached")

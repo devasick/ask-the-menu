@@ -13,7 +13,7 @@ import pytest
 
 from app.config import ModelPrice, Settings
 from app.llm.aliases import resolve
-from app.llm.base import LLMError, Message, compute_cost
+from app.llm.base import ChatResult, LLMError, Message, compute_cost
 from app.llm.fake import FakeLLMClient, fake_embedding
 from app.llm.providers import DirectLLMClient
 
@@ -127,10 +127,77 @@ async def test_embed_keeps_input_order() -> None:
     assert result.usage.cost_usd == Decimal("0.000001")
 
 
-async def test_streaming_is_not_in_the_mvp() -> None:
-    client, _, _ = _client()
-    with pytest.raises(NotImplementedError):
-        await client.chat("menu-fast", MESSAGES, stream=True)
+class FakeAnthropicStream:
+    def __init__(self, chunks: list[str], error_after: int | None = None) -> None:
+        self.chunks, self.error_after = chunks, error_after
+
+    async def __aenter__(self) -> "FakeAnthropicStream":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    @property
+    async def text_stream(self) -> Any:
+        for i, chunk in enumerate(self.chunks):
+            if self.error_after is not None and i >= self.error_after:
+                raise _conn_error()
+            yield chunk
+
+    async def get_final_message(self) -> Any:
+        return SimpleNamespace(usage=SimpleNamespace(input_tokens=100, output_tokens=20))
+
+
+def _streaming_client(error_after: int | None = None) -> tuple[DirectLLMClient, FakeOpenAI]:
+    oai = FakeOpenAI()
+
+    async def openai_stream(**kwargs: Any) -> Any:
+        assert kwargs["stream"] is True
+
+        async def chunks() -> Any:
+            yield SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content="backup"))], usage=None
+            )
+            yield SimpleNamespace(
+                choices=[], usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3)
+            )
+
+        return chunks()
+
+    oai.chat = SimpleNamespace(completions=SimpleNamespace(create=openai_stream))
+    stream = FakeAnthropicStream(['{"answer": ', '"Mild."}'], error_after)
+    messages = SimpleNamespace(stream=lambda **kwargs: stream)
+    client = DirectLLMClient(
+        SETTINGS,
+        anthropic_client=SimpleNamespace(messages=messages),  # type: ignore[arg-type]
+        openai_client=oai,  # type: ignore[arg-type]
+    )
+    return client, oai
+
+
+async def test_stream_yields_deltas_then_result_with_cost() -> None:
+    client, _ = _streaming_client()
+    events = [e async for e in client.chat_stream("menu-fast", MESSAGES)]
+    assert events[:2] == ['{"answer": ', '"Mild."}']
+    final = events[-1]
+    assert isinstance(final, ChatResult)
+    assert final.text == '{"answer": "Mild."}'
+    assert final.usage.cost_usd == Decimal("0.0002")
+    assert (await client.chat("menu-fast", MESSAGES, stream=True)).text == final.text
+
+
+async def test_stream_falls_back_before_the_first_delta() -> None:
+    client, _ = _streaming_client(error_after=0)
+    events = [e async for e in client.chat_stream("menu-fast", MESSAGES)]
+    assert events[0] == "backup"
+    assert isinstance(events[-1], ChatResult) and events[-1].alias == "menu-backup"
+    assert events[-1].usage.tokens_in == 7
+
+
+async def test_stream_failing_mid_answer_raises_instead_of_switching_model() -> None:
+    client, _ = _streaming_client(error_after=1)
+    with pytest.raises(LLMError):
+        _ = [e async for e in client.chat_stream("menu-fast", MESSAGES)]
 
 
 def _cos(a: list[float], b: list[float]) -> float:

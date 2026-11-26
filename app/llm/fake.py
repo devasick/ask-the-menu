@@ -8,7 +8,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -57,8 +57,6 @@ class FakeLLMClient:
         json_schema: dict[str, Any] | None = None,
         stream: bool = False,
     ) -> ChatResult:
-        if stream:
-            raise NotImplementedError("streaming arrives in Phase 2")
         self.calls.append(("chat", alias, messages))
         text = self.responder(alias, messages, json_schema)
         tokens_in = sum(len(m["content"].split()) for m in messages)
@@ -66,6 +64,18 @@ class FakeLLMClient:
         model = self.model_id(alias)
         usage = Usage(tokens_in, tokens_out, self._cost(model, tokens_in, tokens_out))
         return ChatResult(text=text, alias=alias, model=model, usage=usage)
+
+    async def chat_stream(
+        self,
+        alias: Alias,
+        messages: list[Message],
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[str | ChatResult]:
+        """Same reply as chat(), delivered in small chunks (split mid-escape on purpose)."""
+        result = await self.chat(alias, messages, json_schema)
+        for i in range(0, len(result.text), 7):
+            yield result.text[i : i + 7]
+        yield result
 
     def model_id(self, alias: Alias) -> str:
         return f"fake-{alias}"

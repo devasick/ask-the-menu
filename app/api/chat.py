@@ -1,26 +1,31 @@
+import asyncio
 import hmac
+import json
 import logging
 import time
 import uuid
+from collections.abc import AsyncIterator
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.ingest import get_llm
 from app.config import Settings
 from app.db.models import QueryLog, Restaurant
 from app.db.session import get_session
 from app.generation.generate import ChatAnswer, add_usage, answer_question
+from app.generation.stream import OnDelta
 from app.ingest.schemas import has_allergen_data
 from app.llm.base import LLMClient, Usage
 from app.llm.tracing import request_trace
 from app.retrieval.rerank import Reranker
 from app.retrieval.router import RouteContext, parse_question, route_question
 from app.retrieval.sql_search import ItemHit
-from app.security.auth import get_settings, hash_widget_key
+from app.security.auth import hash_widget_key
 from app.security.budget import SearchOnlyLLM, over_budget
 from app.security.ratelimit import RateLimiter
 
@@ -80,11 +85,6 @@ class ChatResponse(BaseModel):
         )
 
 
-def get_reranker(request: Request) -> Reranker:
-    reranker: Reranker = request.app.state.reranker
-    return reranker
-
-
 async def _authorized_restaurant(
     session: AsyncSession, restaurant_id: uuid.UUID, widget_key: str | None
 ) -> Restaurant:
@@ -101,17 +101,16 @@ async def _authorized_restaurant(
     return restaurant
 
 
-@router.post("/chat")
-async def chat(
+async def _admit(
     request: Request,
+    session: AsyncSession,
     body: ChatRequest,
-    session: Annotated[AsyncSession, Depends(get_session)],
-    llm: Annotated[LLMClient, Depends(get_llm)],
-    reranker: Annotated[Reranker, Depends(get_reranker)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    x_widget_key: Annotated[str | None, Header()] = None,
-) -> ChatResponse:
-    restaurant = await _authorized_restaurant(session, body.restaurant_id, x_widget_key)
+    widget_key: str | None,
+    llm: LLMClient,
+) -> tuple[Restaurant, LLMClient]:
+    """Auth, rate limit and budget, before any work. Returns the LLM client to use: the real
+    one, or a search-only stand-in once the restaurant's monthly budget is spent."""
+    restaurant = await _authorized_restaurant(session, body.restaurant_id, widget_key)
     limiter: RateLimiter | None = request.app.state.rate_limiter
     if limiter is not None:
         ip = request.client.host if request.client else None
@@ -122,19 +121,33 @@ async def chat(
                 "too many questions, please try again later",
                 headers={"Retry-After": str(wait)},
             )
-    started = time.perf_counter()
     if await over_budget(session, restaurant):
         llm = SearchOnlyLLM(llm)
+    return restaurant, llm
+
+
+async def _answer(
+    request: Request,
+    session: AsyncSession,
+    llm: LLMClient,
+    restaurant: Restaurant,
+    body: ChatRequest,
+    on_delta: OnDelta | None = None,
+) -> ChatResponse:
+    """The whole pipeline for one question, traced and logged."""
+    started = time.perf_counter()
+    reranker: Reranker = request.app.state.reranker
+    settings: Settings = request.app.state.settings
     trace_fields = {
         "name": "chat",
         "session_id": body.session_id,
         "input": body.question,
-        "metadata": {"restaurant_id": str(restaurant.id)},
+        "metadata": {"restaurant_id": str(restaurant.id), "stream": on_delta is not None},
     }
     with request_trace(request.app.state.langfuse, **trace_fields) as trace:
         parsed, parse_usage = await parse_question(llm, body.question, body.language)
         result = await route_question(RouteContext(session, llm, reranker, restaurant.id, parsed))
-        answer = await answer_question(llm, settings, restaurant.name, result)
+        answer = await answer_question(llm, settings, restaurant.name, result, on_delta)
         response = ChatResponse.of(answer)
         if trace is not None:
             try:
@@ -144,6 +157,67 @@ async def chat(
     latency_ms = round((time.perf_counter() - started) * 1000)
     await _log_query(session, restaurant.id, body.question, answer, parse_usage, latency_ms)
     return response
+
+
+@router.post("/chat")
+async def chat(
+    request: Request,
+    body: ChatRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    llm: Annotated[LLMClient, Depends(get_llm)],
+    x_widget_key: Annotated[str | None, Header()] = None,
+) -> ChatResponse:
+    restaurant, llm = await _admit(request, session, body, x_widget_key, llm)
+    return await _answer(request, session, llm, restaurant, body)
+
+
+def _sse(event: str, data: object) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/chat/stream", response_class=StreamingResponse)
+async def chat_stream(
+    request: Request,
+    body: ChatRequest,
+    llm: Annotated[LLMClient, Depends(get_llm)],
+    x_widget_key: Annotated[str | None, Header()] = None,
+) -> StreamingResponse:
+    """Server-sent events: `delta` {"text"} while the answer is written, then `done` with the
+    same body as POST /chat (authoritative: guardrails may change the text), or `error`.
+    Auth, validation and rate limit errors are plain HTTP errors before the stream starts."""
+    sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
+    async with sessionmaker() as session:
+        restaurant, llm = await _admit(request, session, body, x_widget_key, llm)
+
+    async def events() -> AsyncIterator[str]:
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def on_delta(text: str) -> None:
+            await queue.put(_sse("delta", {"text": text}))
+
+        async def work() -> None:
+            try:
+                async with sessionmaker() as session:
+                    response = await _answer(request, session, llm, restaurant, body, on_delta)
+                await queue.put(_sse("done", response.model_dump(mode="json")))
+            except Exception:
+                log.exception("chat stream failed")
+                await queue.put(_sse("error", {"detail": "something went wrong"}))
+            finally:
+                await queue.put(None)
+
+        task = asyncio.create_task(work())
+        try:
+            while (item := await queue.get()) is not None:
+                yield item
+        finally:
+            task.cancel()  # guest disconnected: stop generating (no-op when already done)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 async def _log_query(
