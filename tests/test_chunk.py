@@ -30,12 +30,10 @@ def test_item_chunk_template_is_deterministic_and_readable() -> None:
     assert chunk.key == ("menu_item", uuid.UUID(int=1))
 
 
-def test_unknown_and_no_allergens_are_worded_differently() -> None:
-    unknown = item_chunk(**{**ITEM, "allergens": None})  # type: ignore[arg-type]
-    none = item_chunk(**{**ITEM, "allergens": []})  # type: ignore[arg-type]
-    assert "Allergens: unknown, ask staff" in unknown.content
-    assert "Allergens: none of the 14 EU allergens" in none.content
-    assert unknown.metadata["allergens"] is None
+def test_missing_and_empty_allergens_both_read_as_unknown() -> None:
+    for allergens in (None, list[str]()):
+        chunk = item_chunk(**{**ITEM, "allergens": allergens})  # type: ignore[arg-type]
+        assert "Allergens: unknown, ask staff" in chunk.content
 
 
 def test_price_formatting_keeps_cents() -> None:

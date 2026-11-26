@@ -5,7 +5,8 @@
     "name": "The Curry House",
     "default_language": "de",
     "monthly_budget_usd": "10.00",
-    "info": "The Curry House is a fictional demo restaurant serving North and South Indian dishes at Musterstraße 1, 10115 Berlin. Most curries are cooked to order, and the spice level of many dishes can be adjusted on request."
+    "info": "The Curry House is a fictional demo restaurant serving North and South Indian dishes at Musterstraße 1, 10115 Berlin. Most curries are cooked to order, and the spice level of many dishes can be adjusted on request.",
+    "widget_key": "demo-widget-key-curry-house"
   },
   "items": [
     {

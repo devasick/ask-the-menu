@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from app.ingest.normalize import normalize_text
+from app.ingest.schemas import has_allergen_data
 
 SourceType = Literal["menu_item", "faq", "info"]
 
@@ -29,11 +30,9 @@ def format_price(price_cents: int, currency: str) -> str:
 
 
 def allergen_line(allergens: list[str] | None) -> str:
-    if allergens is None:
-        return "Allergens: unknown, ask staff"
-    if not allergens:
-        return "Allergens: none of the 14 EU allergens"
-    return "Allergens: " + ", ".join(allergens)
+    if has_allergen_data(allergens):
+        return "Allergens: " + ", ".join(allergens)
+    return "Allergens: unknown, ask staff"
 
 
 def item_chunk(

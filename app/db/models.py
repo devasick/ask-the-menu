@@ -60,6 +60,8 @@ class Restaurant(Base):
     monthly_budget_usd: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=Decimal("10.00")
     )
+    # sha256 of the public chat widget key; chat requests must present the matching key.
+    widget_key_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = _now()
 
 
@@ -80,8 +82,7 @@ class MenuItem(Base):
     category: Mapped[str] = mapped_column(String(80), nullable=False)
     price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR")
-    # NULL means "allergen data unknown" (guardrail: tell the guest to ask staff).
-    # An empty array means "contains none of the 14 EU allergens". The two must never be conflated.
+    # NULL or empty means "allergen data unknown": the guardrail tells the guest to ask staff.
     allergens: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     dietary_tags: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     is_available: Mapped[bool] = mapped_column(nullable=False, default=True)
@@ -156,6 +157,8 @@ class QueryLog(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False)
     route_taken: Mapped[str] = mapped_column(String(16), nullable=False)
     cited_item_ids: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    # False when the guest got no items and no confident answer ("questions with no result").
+    has_result: Mapped[bool] = mapped_column(nullable=False, default=True)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

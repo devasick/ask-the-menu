@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     model_prices: dict[str, ModelPrice] = Field(default_factory=dict)
     llm_timeout_s: float = Field(default=20.0, gt=0)
     llm_max_retries: int = Field(default=2, ge=0)
+    # Langfuse tracing: enabled only when both keys are set.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: SecretStr | None = None
+    langfuse_host: str = "http://localhost:3000"
+
+    # Escalate RAG generation from menu-fast to menu-smart for multi-part questions.
+    escalate_min_question_marks: int = Field(default=2, ge=1)
+    escalate_min_words: int = Field(default=30, ge=1)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
