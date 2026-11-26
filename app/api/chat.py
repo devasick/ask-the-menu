@@ -21,6 +21,8 @@ from app.retrieval.rerank import Reranker
 from app.retrieval.router import RouteContext, parse_question, route_question
 from app.retrieval.sql_search import ItemHit
 from app.security.auth import get_settings, hash_widget_key
+from app.security.budget import SearchOnlyLLM, over_budget
+from app.security.ratelimit import RateLimiter
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -110,7 +112,19 @@ async def chat(
     x_widget_key: Annotated[str | None, Header()] = None,
 ) -> ChatResponse:
     restaurant = await _authorized_restaurant(session, body.restaurant_id, x_widget_key)
+    limiter: RateLimiter | None = request.app.state.rate_limiter
+    if limiter is not None:
+        ip = request.client.host if request.client else None
+        wait = await limiter.retry_after(restaurant.id, body.session_id, ip)
+        if wait is not None:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "too many questions, please try again later",
+                headers={"Retry-After": str(wait)},
+            )
     started = time.perf_counter()
+    if await over_budget(session, restaurant):
+        llm = SearchOnlyLLM(llm)
     trace_fields = {
         "name": "chat",
         "session_id": body.session_id,

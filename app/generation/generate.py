@@ -23,6 +23,10 @@ FALLBACK_TEXT = {
     "en": "Here is what I found on the menu:",
     "de": "Das habe ich auf der Karte gefunden:",
 }
+NOTHING_FOUND_TEXT = {
+    "en": "I couldn't find that on the menu. Please ask the staff.",
+    "de": "Das habe ich auf der Karte nicht gefunden. Bitte fragen Sie das Personal.",
+}
 
 
 class GeneratedAnswer(BaseModel):
@@ -111,7 +115,7 @@ async def answer_question(
     if generated is None:
         # Fallback: show what retrieval found, without generated text.
         return ChatAnswer(
-            answer=FALLBACK_TEXT[lang],
+            answer=(FALLBACK_TEXT if retrieved else NOTHING_FOUND_TEXT)[lang],
             items=list(retrieved.values()),
             route=result.route,
             sources=sources,

@@ -4,21 +4,24 @@ Both legs filter by restaurant_id and apply the structured filters as SQL WHERE 
 filtered-out or foreign item can never reach the reranker or the prompt.
 """
 
+import logging
 import re
 import uuid
 from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, TypeVar
 
 from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chunk, MenuItem
-from app.llm.base import LLMClient, Usage
+from app.llm.base import LLMClient, LLMError, Usage
 from app.retrieval.query_parser import FILLER, ParsedQuery, normalize_question
 from app.retrieval.rerank import Reranker
 from app.retrieval.sql_search import ITEM_COLUMNS, ItemHit, item_filter_clauses
 
+log = logging.getLogger(__name__)
 K = TypeVar("K", bound=Hashable)
 RRF_K = 60
 CANDIDATES = 20
@@ -72,17 +75,23 @@ async def hybrid_search(
     candidates: int = CANDIDATES,
     top_k: int = TOP_K,
 ) -> tuple[list[RetrievedChunk], Usage]:
-    embedded = await llm.embed("menu-embed", [parsed.question])
-    qvec = embedded.vectors[0]
-
-    vector_ids = list(
-        await session.scalars(
-            _scoped(restaurant_id, parsed)
-            .where(Chunk.embedding.isnot(None))
-            .order_by(Chunk.embedding.cosine_distance(qvec))
-            .limit(candidates)
+    vector_ids: list[uuid.UUID] = []
+    usage = Usage(0, 0, Decimal(0))
+    try:
+        embedded = await llm.embed("menu-embed", [parsed.question])
+    except LLMError as exc:
+        # Provider down or search-only mode (budget spent): keyword search still answers.
+        log.info("vector leg skipped: %s", exc)
+    else:
+        usage = embedded.usage
+        vector_ids = list(
+            await session.scalars(
+                _scoped(restaurant_id, parsed)
+                .where(Chunk.embedding.isnot(None))
+                .order_by(Chunk.embedding.cosine_distance(embedded.vectors[0]))
+                .limit(candidates)
+            )
         )
-    )
 
     keyword_ids: list[uuid.UUID] = []
     terms = parsed.semantic_terms or tuple(
@@ -107,7 +116,7 @@ async def hybrid_search(
         for cid, score in fused
         if (c := chunks.get(cid))
     ]
-    return await reranker.rerank(parsed.question, ranked, top_k), embedded.usage
+    return await reranker.rerank(parsed.question, ranked, top_k), usage
 
 
 async def _load(

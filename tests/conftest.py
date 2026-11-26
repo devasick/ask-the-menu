@@ -9,6 +9,7 @@ from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.redis import RedisContainer
 
 from app.db.session import make_engine, make_sessionmaker
 
@@ -28,6 +29,12 @@ def pg_url() -> Iterator[str]:
         url = pg.get_connection_url()
         command.upgrade(alembic_config(url), "head")
         yield url
+
+
+@pytest.fixture(scope="session")
+def redis_url() -> Iterator[str]:
+    with RedisContainer("redis:7-alpine") as r:
+        yield f"redis://{r.get_container_host_ip()}:{r.get_exposed_port(6379)}/0"
 
 
 @pytest.fixture(scope="session")
