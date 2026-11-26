@@ -4,7 +4,7 @@ Tracing must never break a request, so every Langfuse call is best effort.
 """
 
 import logging
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
@@ -71,6 +71,17 @@ class TracingLLMClient:
         result = await self._inner.chat(alias, messages, json_schema, stream)
         self._record(f"chat {result.alias}", result.model, messages, result.text, result.usage)
         return result
+
+    async def chat_stream(
+        self,
+        alias: Alias,
+        messages: list[Message],
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[str | ChatResult]:
+        async for event in self._inner.chat_stream(alias, messages, json_schema):
+            if isinstance(event, ChatResult):
+                self._record(f"chat {event.alias}", event.model, messages, event.text, event.usage)
+            yield event
 
     async def embed(self, alias: Alias, texts: list[str]) -> EmbedResult:
         result = await self._inner.embed(alias, texts)

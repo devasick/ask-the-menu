@@ -4,7 +4,8 @@
  *   <AskTheMenu apiUrl="https://ask.example.com" restaurantId="…" widgetKey="…" language="de" />
  *
  * React 18+, no UI library, styles scoped under `.atm-`. Mobile first: full screen on phones,
- * a floating card from 640px up. The widget key is public by design (it only allows /chat for
+ * a floating card from 640px up. Answers stream in over POST /chat/stream (server-sent events).
+ * The widget key is public by design (it only allows /chat and /chat/stream for
  * this restaurant), so it can ship in the page.
  */
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
@@ -116,6 +117,7 @@ export function AskTheMenu({ apiUrl, restaurantId, widgetKey, language = "de" }:
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState(""); // answer text streamed so far
   const panelId = useId();
   const titleId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -129,7 +131,7 @@ export function AskTheMenu({ apiUrl, restaurantId, widgetKey, language = "de" }:
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
-  }, [messages, busy]);
+  }, [messages, busy, draft]);
 
   function close() {
     setOpen(false);
@@ -150,7 +152,7 @@ export function AskTheMenu({ apiUrl, restaurantId, widgetKey, language = "de" }:
     setMessages((m) => [...m, { role: "guest", text }]);
     setBusy(true);
     try {
-      const response = await fetch(`${apiUrl.replace(/\/$/, "")}/chat`, {
+      const response = await fetch(`${apiUrl.replace(/\/$/, "")}/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Widget-Key": widgetKey },
         body: JSON.stringify({
@@ -160,12 +162,21 @@ export function AskTheMenu({ apiUrl, restaurantId, widgetKey, language = "de" }:
           language,
         }),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const reply = (await response.json()) as ChatResponse;
-      setMessages((m) => [...m, { role: "assistant", reply }]);
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+      let reply: ChatResponse | null = null;
+      for await (const { event, data } of readEvents(response.body)) {
+        if (event === "delta") setDraft((d) => d + (data as { text: string }).text);
+        else if (event === "done") reply = data as ChatResponse;
+        else if (event === "error") break;
+      }
+      if (!reply) throw new Error("stream ended without an answer");
+      // The final reply is authoritative: guardrails may have changed the streamed text.
+      const final = reply;
+      setMessages((m) => [...m, { role: "assistant", reply: final }]);
     } catch {
       setMessages((m) => [...m, { role: "error", text: t.error }]);
     } finally {
+      setDraft("");
       setBusy(false);
     }
   }
@@ -203,7 +214,8 @@ export function AskTheMenu({ apiUrl, restaurantId, widgetKey, language = "de" }:
             {messages.map((m, i) => (
               <MessageView key={i} message={m} language={language} />
             ))}
-            {busy && <p className="atm-thinking">{t.thinking}</p>}
+            {busy && draft && <p className="atm-msg atm-assistant">{draft}</p>}
+            {busy && !draft && <p className="atm-thinking">{t.thinking}</p>}
           </div>
           <form className="atm-form" onSubmit={ask}>
             <label className="atm-visually-hidden" htmlFor={`${panelId}-q`}>
@@ -227,6 +239,29 @@ export function AskTheMenu({ apiUrl, restaurantId, widgetKey, language = "de" }:
       )}
     </div>
   );
+}
+
+/** Parses a server-sent event stream into {event, data} frames. */
+async function* readEvents(body: ReadableStream<Uint8Array>) {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buffer += value;
+    let end;
+    while ((end = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      let event = "message";
+      let data = "";
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (data) yield { event, data: JSON.parse(data) as unknown };
+    }
+  }
 }
 
 function MessageView({ message, language }: { message: Message; language: Language }) {

@@ -6,8 +6,8 @@ deliver?". Answers come only from that restaurant's own data. It runs as a stand
 that [MenuNow](https://menunow.de) (a digital menu SaaS) talks to over HTTP, and it ships with
 a drop-in React chat widget.
 
-**Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits, budgets and
-injection defense are done; streaming, caching with an FAQ route, and a real reranker are next.
+**Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits, budgets,
+injection defense and streaming are done; caching with an FAQ route and a real reranker are next.
 
 ## The problem
 
@@ -244,7 +244,7 @@ All bodies are JSON. Errors use FastAPI's `{"detail": ...}` shape.
 
 - `items[].id` is MenuNow's own item ID.
 - `allergens: null` means unknown.
-- `route` is `sql` or `rag` (Phase 2 adds cache and FAQ routes).
+- `route` is `sql`, `rag` or `blocked` (Phase 2 adds cache and FAQ routes).
 - `disclaimer` is set whenever allergens come up.
 
 Errors:
@@ -253,6 +253,33 @@ Errors:
 - **422:** invalid body.
 - **429:** too many questions from this session or IP. Wait the number of seconds in
   `Retry-After`.
+
+### `POST /chat/stream` (header `X-Widget-Key`)
+
+Same request body as `/chat`. The response is `text/event-stream` with these events:
+
+```text
+event: delta
+data: {"text": "Chicken Korma is "}
+
+event: delta
+data: {"text": "mild and creamy."}
+
+event: done
+data: { ...the same body as POST /chat... }
+```
+
+- `delta` carries the answer text as the model writes it. Only free-text RAG answers stream.
+  SQL, blocked and allergen answers are written in code and arrive as a single `done`.
+- `done` is authoritative. Citation and allergen checks run after generation and can change
+  the text, so the client replaces the streamed text with `done.answer`.
+- Streamed text stops as soon as it starts echoing the system prompt, and `done` then holds
+  the refusal.
+- `error` (`{"detail": ...}`) means the answer failed after the stream started.
+- 401, 422 and 429 are plain HTTP errors sent before the stream starts.
+
+If the main model fails before its first token, the request falls back to `menu-backup`. A
+failure mid-answer ends with `error`, because the guest has already seen part of the text.
 
 ### `POST /ingest/{restaurant_id}` (header `X-API-Key`, ingest key)
 
@@ -302,13 +329,14 @@ import { AskTheMenu } from "./AskTheMenu";
 What it does:
 - shows a floating button that opens the chat, full screen on phones and a 380px card from
   640px up
+- streams the answer from `/chat/stream` as it is written, then swaps in the final reply
 - shows item cards with price, allergen badges, an "allergens unknown, please ask staff"
   badge and a sold-out badge, plus the allergen disclaimer
 - follows the system dark mode
 - for accessibility: a labelled dialog, a polite live log, alerts for errors, Escape to close
   with focus returned to the button, 44px touch targets and visible focus rings
 
-The widget key is public by design. It only lets a browser call `/chat` for that one
+The widget key is public by design. It only lets a browser call `/chat` and `/chat/stream` for that one
 restaurant.
 
 ## Integrating with MenuNow
@@ -340,15 +368,15 @@ restaurant.
 2. Phase 2:
    - ~~per-session and per-IP rate limits, and enforcement of `monthly_budget_usd`~~ (done)
    - ~~prompt injection detection and output checks~~ (done)
-   - streaming answers (SSE) in the API and the widget
+   - ~~streaming answers (SSE) in the API and the widget~~ (done)
    - exact cache, semantic cache and an FAQ route ahead of RAG
    - a real cross-encoder reranker behind the existing interface
 3. Eval runs in CI on every PR against a recorded real-model baseline, plus more languages.
 
 ## Migrating to LiteLLM
 
-All model access goes through one interface, `app/llm/base.py::LLMClient` (`chat`, `embed`,
-`model_id`). The only implementation, `app/llm/providers.py`, is the only module allowed to
+All model access goes through one interface, `app/llm/base.py::LLMClient` (`chat`,
+`chat_stream`, `embed`, `model_id`). The only implementation, `app/llm/providers.py`, is the only module allowed to
 import the `anthropic` and `openai` SDKs (a test enforces this). App code names aliases
 (`menu-fast`, `menu-smart`, `menu-backup`, `menu-embed`), never model IDs.
 

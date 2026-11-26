@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.config import Settings
 from app.generation.guardrails import allergen_answer, is_multi_part, validate_citations
 from app.generation.prompts import ANSWER_SCHEMA, system_prompt, user_prompt
+from app.generation.stream import OnDelta, stream_reply
 from app.generation.templates import ALLERGEN_DISCLAIMER
 from app.llm.aliases import Alias
 from app.llm.base import LLMClient, LLMError, Message, Usage
@@ -60,8 +61,14 @@ def add_usage(a: Usage, b: Usage) -> Usage:
 
 
 async def answer_question(
-    llm: LLMClient, settings: Settings, restaurant_name: str, result: RouteResult
+    llm: LLMClient,
+    settings: Settings,
+    restaurant_name: str,
+    result: RouteResult,
+    on_delta: OnDelta | None = None,
 ) -> ChatAnswer:
+    """With on_delta, the first generation attempt streams its answer text through it.
+    Allergen answers never stream: their text is rebuilt from stored data at the end."""
     parsed = result.parsed
     lang = parsed.language
     disclaimer = ALLERGEN_DISCLAIMER[lang] if parsed.mentions_allergen else None
@@ -101,7 +108,10 @@ async def answer_question(
     answered_by: Alias | None = None
     for attempt in range(MAX_ATTEMPTS):
         try:
-            reply = await llm.chat(alias, messages, json_schema=ANSWER_SCHEMA)
+            if on_delta is not None and attempt == 0 and not parsed.mentions_allergen:
+                reply = await stream_reply(llm, alias, messages, ANSWER_SCHEMA, on_delta)
+            else:
+                reply = await llm.chat(alias, messages, json_schema=ANSWER_SCHEMA)
         except LLMError as exc:
             log.warning("generation failed: %s", exc)
             break
