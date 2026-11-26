@@ -226,6 +226,10 @@ handles.
 
 - **No model where SQL will do.** Pure filter questions (a third of the eval set) cost
   nothing. Parsing is rules-first too.
+- **Any provider per alias.** Each alias in `.env` is `<anthropic|openai|gemini>:<model id>`.
+  Gemini goes through its OpenAI-compatible API (no extra SDK) and needs `GEMINI_API_KEY`.
+  Embeddings can come from OpenAI or Gemini; Gemini is asked for 1536 dims, and a vector of
+  any other size is rejected before it reaches the database.
 - **A small model by default.** `menu-fast` answers. `menu-smart` only gets multi-part
   questions (a heuristic in `app/generation/guardrails.py`), and `menu-backup` takes over when
   `menu-fast`'s provider fails.

@@ -11,6 +11,7 @@ import anthropic
 import openai
 
 from app.config import Settings
+from app.db.models import EMBEDDING_DIM
 from app.llm.aliases import FALLBACKS, Alias, ModelRoute, resolve
 from app.llm.base import ChatResult, EmbedResult, LLMError, Message, Usage, compute_cost
 
@@ -18,6 +19,8 @@ log = logging.getLogger(__name__)
 
 # Answers are 1-3 sentences plus a few item IDs.
 CHAT_MAX_TOKENS = 1024
+# Gemini speaks the OpenAI API here, so it needs no SDK of its own.
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 _PROVIDER_ERRORS = (anthropic.APIError, openai.APIError)
 
 
@@ -27,6 +30,7 @@ class DirectLLMClient:
         settings: Settings,
         anthropic_client: anthropic.AsyncAnthropic | None = None,
         openai_client: openai.AsyncOpenAI | None = None,
+        gemini_client: openai.AsyncOpenAI | None = None,
     ) -> None:
         self._settings = settings
         # The SDKs retry connection errors, 408/409/429 and 5xx with exponential backoff.
@@ -40,6 +44,13 @@ class DirectLLMClient:
         self._openai = openai_client or openai.AsyncOpenAI(
             api_key=_secret(settings.openai_api_key) or "unset", **common
         )
+        self._gemini = gemini_client or openai.AsyncOpenAI(
+            api_key=_secret(settings.gemini_api_key) or "unset", base_url=GEMINI_BASE_URL, **common
+        )
+
+    def _compat(self, route: ModelRoute) -> openai.AsyncOpenAI:
+        """The OpenAI-API client for an openai or gemini route."""
+        return self._gemini if route.provider == "gemini" else self._openai
 
     async def chat(
         self,
@@ -94,13 +105,19 @@ class DirectLLMClient:
 
     async def embed(self, alias: Alias, texts: list[str]) -> EmbedResult:
         route = resolve(self._settings, alias)
-        if route.provider != "openai":
-            raise ValueError(f"{alias}: embeddings are only implemented for openai")
+        if route.provider == "anthropic":
+            raise ValueError(f"{alias}: anthropic has no embeddings; use openai or gemini")
+        # Gemini's default is 3072 dims; ask for the column's size. Cosine ignores scale.
+        dims: dict[str, Any] = {"dimensions": EMBEDDING_DIM} if route.provider == "gemini" else {}
         try:
-            resp = await self._openai.embeddings.create(model=route.model, input=texts)
+            resp = await self._compat(route).embeddings.create(
+                model=route.model, input=texts, **dims
+            )
         except openai.APIError as exc:
             raise LLMError(f"{alias} failed: {type(exc).__name__}") from exc
         vectors = [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
+        if any(len(v) != EMBEDDING_DIM for v in vectors):
+            raise LLMError(f"{alias}: {route.model} did not return {EMBEDDING_DIM}-dim vectors")
         tokens = resp.usage.prompt_tokens
         cost = compute_cost(self._settings.model_prices, route.model, tokens, 0)
         return EmbedResult(vectors=vectors, model=route.model, usage=Usage(tokens, 0, cost))
@@ -111,7 +128,7 @@ class DirectLLMClient:
         if route.provider == "anthropic":
             text, tin, tout = await self._anthropic_chat(route.model, messages, json_schema)
         else:
-            text, tin, tout = await self._openai_chat(route.model, messages, json_schema)
+            text, tin, tout = await self._openai_chat(route, messages, json_schema)
         cost = compute_cost(self._settings.model_prices, route.model, tin, tout)
         return ChatResult(
             text=text, alias=route.alias, model=route.model, usage=Usage(tin, tout, cost)
@@ -132,7 +149,7 @@ class DirectLLMClient:
                 final = await stream.get_final_message()
             tin, tout = final.usage.input_tokens, final.usage.output_tokens
         else:
-            chunks = await self._openai.chat.completions.create(
+            chunks = await self._compat(route).chat.completions.create(
                 model=route.model,
                 messages=cast(list[openai.types.chat.ChatCompletionMessageParam], messages),
                 max_completion_tokens=CHAT_MAX_TOKENS,
@@ -163,10 +180,10 @@ class DirectLLMClient:
         return text, resp.usage.input_tokens, resp.usage.output_tokens
 
     async def _openai_chat(
-        self, model: str, messages: list[Message], json_schema: dict[str, Any] | None
+        self, route: ModelRoute, messages: list[Message], json_schema: dict[str, Any] | None
     ) -> tuple[str, int, int]:
-        resp = await self._openai.chat.completions.create(
-            model=model,
+        resp = await self._compat(route).chat.completions.create(
+            model=route.model,
             messages=cast(list[openai.types.chat.ChatCompletionMessageParam], messages),
             max_completion_tokens=CHAT_MAX_TOKENS,
             **_openai_args(json_schema),

@@ -66,6 +66,8 @@ class FakeOpenAI:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._chat))
         self.embeddings = SimpleNamespace(create=self._embed)
         self.chat_calls: list[dict[str, Any]] = []
+        self.embed_calls: list[dict[str, Any]] = []
+        self.dim = 1536
 
     async def _chat(self, **kwargs: Any) -> Any:
         self.chat_calls.append(kwargs)
@@ -74,9 +76,12 @@ class FakeOpenAI:
             usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3),
         )
 
-    async def _embed(self, *, model: str, input: list[str]) -> Any:
+    async def _embed(self, *, model: str, input: list[str], **kwargs: Any) -> Any:
+        self.embed_calls.append({"model": model, **kwargs})
         # Returned out of order on purpose: the client must sort by index.
-        data = [SimpleNamespace(index=i, embedding=[float(i)]) for i in range(len(input))]
+        data = [
+            SimpleNamespace(index=i, embedding=[float(i)] * self.dim) for i in range(len(input))
+        ]
         return SimpleNamespace(data=data[::-1], usage=SimpleNamespace(prompt_tokens=50))
 
 
@@ -123,8 +128,25 @@ async def test_smart_has_no_fallback() -> None:
 async def test_embed_keeps_input_order() -> None:
     client, _, _ = _client()
     result = await client.embed("menu-embed", ["a", "b", "c"])
-    assert result.vectors == [[0.0], [1.0], [2.0]]
+    assert [v[0] for v in result.vectors] == [0.0, 1.0, 2.0]
     assert result.usage.cost_usd == Decimal("0.000001")
+
+
+async def test_gemini_embeddings_ask_for_the_column_size() -> None:
+    gem = FakeOpenAI()
+    settings = SETTINGS.model_copy(update={"model_menu_embed": "gemini:gemini-embed"})
+    client = DirectLLMClient(
+        settings,
+        anthropic_client=SimpleNamespace(messages=FakeAnthropicMessages()),  # type: ignore[arg-type]
+        openai_client=FakeOpenAI(),  # type: ignore[arg-type]
+        gemini_client=gem,  # type: ignore[arg-type]
+    )
+    result = await client.embed("menu-embed", ["a"])
+    assert gem.embed_calls == [{"model": "gemini-embed", "dimensions": 1536}]
+    assert result.model == "gemini-embed" and len(result.vectors[0]) == 1536
+    gem.dim = 3072  # a model that ignores `dimensions` must not reach the vector column
+    with pytest.raises(LLMError, match="1536"):
+        await client.embed("menu-embed", ["a"])
 
 
 class FakeAnthropicStream:
