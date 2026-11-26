@@ -12,7 +12,7 @@ from app.db.session import make_engine, make_sessionmaker
 from app.llm import make_llm_client
 from app.llm.base import LLMClient
 from app.llm.tracing import TracingLLMClient, make_langfuse
-from app.retrieval.rerank import NoOpReranker
+from app.retrieval.rerank import make_reranker
 from app.security.ratelimit import RateLimiter
 
 log = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     app.state.llm = llm or make_llm_client(settings)
     if app.state.langfuse is not None:
         app.state.llm = TracingLLMClient(app.state.llm)
-    app.state.reranker = NoOpReranker()
+    app.state.reranker = make_reranker(settings)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
