@@ -7,7 +7,8 @@ that [MenuNow](https://menunow.de) (a digital menu SaaS) talks to over HTTP, and
 a drop-in React chat widget.
 
 **Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits, budgets,
-injection defense, streaming, and caching with an FAQ route are done; a real reranker is next.
+injection defense, streaming, caching with an FAQ route, and an optional cross-encoder reranker
+are done.
 
 ## The problem
 
@@ -38,7 +39,7 @@ flowchart LR
         R -- pure filter --> SQL[SQL route<br/>templated answer]
         R -- FAQ question --> F[FAQ route<br/>restaurant's own answer]
         R -- everything else --> H[Hybrid search<br/>pgvector + FTS, RRF]
-        H --> RR[Reranker<br/>no-op in MVP]
+        H --> RR[Reranker<br/>no-op or cross-encoder]
         RR --> G[Generation<br/>JSON schema, citations]
         G --> GR[Guardrails<br/>citations, allergens]
         API --> L[(query_logs)]
@@ -95,7 +96,8 @@ the route taken is logged.
    - pgvector cosine search and Postgres full text search (`simple` config, so German and
      English tokens both survive), with any parsed filters applied as SQL `WHERE` clauses
    - the two rankings fused with Reciprocal Rank Fusion (k = 60)
-   - the top 20 go through the reranker, and the top 5 go to `menu-fast`
+   - the top 20 go through the reranker (see [Reranker](#reranker)), and the top 5 go to
+     `menu-fast`
    - multi-part questions escalate to `menu-smart`
 5. **Guardrails.**
    - The model must return JSON (answer, cited item IDs, confidence), validated with one
@@ -172,7 +174,7 @@ n/a. To get real numbers, set `LLM_BACKEND=direct` with API keys, then run `make
 `make eval`.
 
 <!-- eval:start -->
-123 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
+123 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model), reranker: none.
 
 | Metric | Value | n | Gate |
 |---|---|---|---|
@@ -186,11 +188,35 @@ n/a. To get real numbers, set `LLM_BACKEND=direct` with API keys, then run `make
 | Injection refusal | 100.0% | 20 | = 100% ✅ |
 | Cross-tenant leakage | 0 | 123 | = 0 ✅ |
 | Answered without generation | 48.8% | 123 |  |
-| Latency p50 | 7 ms | 123 |  |
+| Latency p50 | 8 ms | 123 |  |
 | Latency p95 | 14 ms | 123 |  |
 | Avg cost per question | $0.000000 | 123 |  |
 | Judge faithfulness | n/a | 0 |  |
 <!-- eval:end -->
+
+### Reranker
+
+`RERANKER=cross-encoder` scores each of the 20 fused candidates against the question with a
+local cross-encoder, [`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1)
+(multilingual including German, Apache-2.0, runs on CPU), and keeps the top 5. It ships as
+an optional extra so the default image stays small: `uv sync --extra rerank`, or
+`docker build --build-arg EXTRAS=rerank .`. The default stays `none` until a real-model eval
+shows it pays off.
+
+Offline eval, same database and dataset, 49 ranked RAG cases:
+
+| Reranker | hit@5 | MRR | Latency p95 (whole pipeline) |
+|---|---|---|---|
+| none (fused order) | 79.6% | 0.752 | 18 ms |
+| cross-encoder | 81.6% | 0.748 | 282 ms |
+
+The gain is small here, for a reason: a reranker can only reorder the 20 candidates it is
+given, and offline the candidates come from bag-of-words vectors that never match across
+languages. Most remaining misses are German questions ("Gibt es etwas mit Spinat?",
+"Kann ich mit Kreditkarte zahlen?") whose right answer was never among the 20. The
+cross-encoder fixed "Was ist euer schärfstes Curry?", and reshuffled the misses without
+fixing them. The real test is a run with real embeddings, where the candidate pool is
+better and reordering matters more. CPU scoring adds roughly 100 to 300 ms per RAG question.
 
 The eval set has already earned its keep: it showed that "I have a nut allergy" and
 "Nussallergie" were not read as exclusions (allergen safety 91.7%), which the parser now
@@ -394,7 +420,7 @@ restaurant.
    - ~~prompt injection detection and output checks~~ (done)
    - ~~streaming answers (SSE) in the API and the widget~~ (done)
    - ~~exact cache, semantic cache and an FAQ route ahead of RAG~~ (done)
-   - a real cross-encoder reranker behind the existing interface
+   - ~~a real cross-encoder reranker behind the existing interface~~ (done)
 3. Eval runs in CI on every PR against a recorded real-model baseline, plus more languages.
 
 ## Migrating to LiteLLM

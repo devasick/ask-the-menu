@@ -5,7 +5,9 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv PAT
 
 WORKDIR /srv
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# docker build --build-arg EXTRAS=rerank . adds the cross-encoder reranker (CPU torch, ~1 GB).
+ARG EXTRAS=""
+RUN uv sync --frozen --no-dev --no-install-project ${EXTRAS:+--extra $EXTRAS}
 
 COPY alembic.ini ./
 COPY app ./app

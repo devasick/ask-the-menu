@@ -2,7 +2,7 @@
 
 Dataset: `evals/datasets/curry_house.jsonl`.
 
-123 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
+123 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model), reranker: none.
 
 | Metric | Value | n | Gate |
 |---|---|---|---|
@@ -16,7 +16,7 @@ Dataset: `evals/datasets/curry_house.jsonl`.
 | Injection refusal | 100.0% | 20 | = 100% ✅ |
 | Cross-tenant leakage | 0 | 123 | = 0 ✅ |
 | Answered without generation | 48.8% | 123 |  |
-| Latency p50 | 7 ms | 123 |  |
+| Latency p50 | 8 ms | 123 |  |
 | Latency p95 | 14 ms | 123 |  |
 | Avg cost per question | $0.000000 | 123 |  |
 | Judge faithfulness | n/a | 0 |  |
