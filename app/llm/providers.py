@@ -115,10 +115,11 @@ class DirectLLMClient:
             )
         except openai.APIError as exc:
             raise LLMError(f"{alias} failed: {type(exc).__name__}") from exc
-        vectors = [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
+        # Gemini sends index None for the first item and no usage.
+        vectors = [d.embedding for d in sorted(resp.data, key=lambda d: d.index or 0)]
         if any(len(v) != EMBEDDING_DIM for v in vectors):
             raise LLMError(f"{alias}: {route.model} did not return {EMBEDDING_DIM}-dim vectors")
-        tokens = resp.usage.prompt_tokens
+        tokens = resp.usage.prompt_tokens if resp.usage else 0
         cost = compute_cost(self._settings.model_prices, route.model, tokens, 0)
         return EmbedResult(vectors=vectors, model=route.model, usage=Usage(tokens, 0, cost))
 
