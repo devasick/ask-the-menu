@@ -3,7 +3,9 @@
 1. Upsert restaurant, items (by external_id) and FAQs (by question); delete what's gone.
 2. Rebuild the desired chunk set and diff it against stored chunks by content_hash.
 3. Embed only new/changed chunks, delete stale ones.
-4. Bump menu_version if anything changed. Same payload twice = no writes, no embedding calls.
+4. Embed new or changed FAQ questions on their own (the FAQ route matches question to question).
+5. Bump menu_version if anything changed and drop the restaurant's cached answers.
+Same payload twice = no writes, no embedding calls.
 
 Everything runs in the caller's transaction (embedding calls included, which is fine at menu
 scale: ~50 chunks per restaurant).
@@ -17,7 +19,7 @@ from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chunk, Faq, MenuItem, Restaurant
+from app.db.models import AnswerCache, Chunk, Faq, MenuItem, Restaurant
 from app.ingest.chunk import ChunkSpec, content_hash, faq_chunk, info_chunk, item_chunk
 from app.ingest.embed import embed_texts
 from app.ingest.schemas import MenuPayload
@@ -56,6 +58,7 @@ async def ingest_menu(session: AsyncSession, llm: LLMClient, payload: MenuPayloa
     synced = await sync_menu(session, payload)
     desired = await _desired_chunks(session, payload)
     embedded, deleted, tokens, cost = await _sync_chunks(session, llm, rid, desired)
+    faq_tokens, faq_cost = await _sync_faq_vectors(session, llm, rid)
 
     if synced.changed or embedded or deleted:
         version = await session.scalar(
@@ -64,6 +67,7 @@ async def ingest_menu(session: AsyncSession, llm: LLMClient, payload: MenuPayloa
             .values(menu_version=Restaurant.menu_version + 1)
             .returning(Restaurant.menu_version)
         )
+        await session.execute(delete(AnswerCache).where(AnswerCache.restaurant_id == rid))
     else:
         version = await session.scalar(select(Restaurant.menu_version).where(Restaurant.id == rid))
 
@@ -76,8 +80,8 @@ async def ingest_menu(session: AsyncSession, llm: LLMClient, payload: MenuPayloa
         faqs_deleted=synced.faqs_deleted,
         chunks_embedded=embedded,
         chunks_deleted=deleted,
-        embed_tokens=tokens,
-        embed_cost_usd=cost,
+        embed_tokens=tokens + faq_tokens,
+        embed_cost_usd=cost + faq_cost,
     )
 
 
@@ -216,3 +220,21 @@ async def _sync_chunks(
         row.embedding = vector
     await session.flush()
     return len(todo), len(stale), result.usage.tokens_in, result.usage.cost_usd
+
+
+async def _sync_faq_vectors(
+    session: AsyncSession, llm: LLMClient, rid: uuid.UUID
+) -> tuple[int, Decimal]:
+    """Embeds FAQ questions that are new, or were embedded with another model.
+    Returns (embed tokens, embed cost)."""
+    model = llm.model_id("menu-embed")
+    faqs = await session.scalars(select(Faq).where(Faq.restaurant_id == rid))
+    todo = [(f, h) for f in faqs if f.question_hash != (h := content_hash(f.question, model))]
+    if not todo:
+        return 0, Decimal(0)
+    result = await embed_texts(llm, [f.question for f, _ in todo])
+    for (faq, h), vector in zip(todo, result.vectors, strict=True):
+        faq.question_embedding = vector
+        faq.question_hash = h
+    await session.flush()
+    return result.usage.tokens_in, result.usage.cost_usd

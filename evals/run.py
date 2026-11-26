@@ -20,13 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings
-from app.db.models import Chunk, MenuItem, Restaurant
+from app.db.models import AnswerCache, Chunk, MenuItem, Restaurant
 from app.db.session import make_engine, make_sessionmaker
-from app.generation.generate import ChatAnswer, add_usage, answer_question
+from app.generation.generate import ChatAnswer, add_usage, answer_question, remember_answer
 from app.generation.prompts import user_prompt
 from app.ingest.pipeline import ingest_menu
 from app.llm import make_llm_client
@@ -178,10 +178,20 @@ async def run_case(
     async with sm() as session:
         started = time.perf_counter()
         parsed, parse_usage = await parse_question(llm, case.question)
-        result = await route_question(
-            RouteContext(session, llm, NoOpReranker(), restaurant.id, parsed)
+        ctx = RouteContext(
+            session,
+            llm,
+            NoOpReranker(),
+            restaurant.id,
+            parsed,
+            menu_version=restaurant.menu_version,
+            faq_min_similarity=settings.faq_min_similarity,
+            semantic_cache_min_similarity=settings.semantic_cache_min_similarity,
         )
+        result = await route_question(ctx)
         answer = await answer_question(llm, settings, restaurant.name, result)
+        await remember_answer(ctx, answer)
+        await session.commit()
         latency_ms = (time.perf_counter() - started) * 1000
     safe, notes = allergen_check(case, result, answer)
     score = None
@@ -194,7 +204,8 @@ async def run_case(
         answer_ids=[i.external_id for i in answer.items],
         answer=answer.answer,
         generated=answer.generated,
-        refused=not answer.items,
+        # An FAQ answer is the restaurant's own text: answered, though it names no dish.
+        refused=answer.route == "blocked" or (not answer.items and answer.route != "faq"),
         allergen_safe=safe,
         leaked=leaked(result, answer, owned),
         latency_ms=latency_ms,
@@ -223,6 +234,11 @@ async def run_eval(
         for path in SEEDS:
             async with sm() as session, session.begin():
                 await ingest_menu(session, llm, load_payload(path))
+        async with sm() as session, session.begin():
+            # Start cold: a re-seed that changes nothing keeps the menu version and its cache.
+            await session.execute(
+                delete(AnswerCache).where(AnswerCache.restaurant_id == CURRY_HOUSE)
+            )
         async with sm() as session:
             restaurant = await session.get(Restaurant, CURRY_HOUSE)
             assert restaurant is not None

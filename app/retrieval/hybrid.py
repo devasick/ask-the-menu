@@ -9,14 +9,12 @@ import re
 import uuid
 from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any, TypeVar
 
 from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chunk, MenuItem
-from app.llm.base import LLMClient, LLMError, Usage
 from app.retrieval.query_parser import FILLER, ParsedQuery, normalize_question
 from app.retrieval.rerank import Reranker
 from app.retrieval.sql_search import ITEM_COLUMNS, ItemHit, item_filter_clauses
@@ -68,27 +66,21 @@ def _scoped(restaurant_id: uuid.UUID, parsed: ParsedQuery) -> Select[Any]:
 
 async def hybrid_search(
     session: AsyncSession,
-    llm: LLMClient,
     reranker: Reranker,
     restaurant_id: uuid.UUID,
     parsed: ParsedQuery,
+    vector: list[float] | None,
     candidates: int = CANDIDATES,
     top_k: int = TOP_K,
-) -> tuple[list[RetrievedChunk], Usage]:
+) -> list[RetrievedChunk]:
+    """`vector` is the question's embedding; without one only the keyword leg runs."""
     vector_ids: list[uuid.UUID] = []
-    usage = Usage(0, 0, Decimal(0))
-    try:
-        embedded = await llm.embed("menu-embed", [parsed.question])
-    except LLMError as exc:
-        # Provider down or search-only mode (budget spent): keyword search still answers.
-        log.info("vector leg skipped: %s", exc)
-    else:
-        usage = embedded.usage
+    if vector is not None:
         vector_ids = list(
             await session.scalars(
                 _scoped(restaurant_id, parsed)
                 .where(Chunk.embedding.isnot(None))
-                .order_by(Chunk.embedding.cosine_distance(embedded.vectors[0]))
+                .order_by(Chunk.embedding.cosine_distance(vector))
                 .limit(candidates)
             )
         )
@@ -116,7 +108,7 @@ async def hybrid_search(
         for cid, score in fused
         if (c := chunks.get(cid))
     ]
-    return await reranker.rerank(parsed.question, ranked, top_k), usage
+    return await reranker.rerank(parsed.question, ranked, top_k)
 
 
 async def _load(

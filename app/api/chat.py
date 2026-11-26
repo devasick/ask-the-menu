@@ -17,7 +17,7 @@ from app.api.ingest import get_llm
 from app.config import Settings
 from app.db.models import QueryLog, Restaurant
 from app.db.session import get_session
-from app.generation.generate import ChatAnswer, add_usage, answer_question
+from app.generation.generate import ChatAnswer, add_usage, answer_question, remember_answer
 from app.generation.stream import OnDelta
 from app.ingest.schemas import has_allergen_data
 from app.llm.base import LLMClient, Usage
@@ -146,8 +146,19 @@ async def _answer(
     }
     with request_trace(request.app.state.langfuse, **trace_fields) as trace:
         parsed, parse_usage = await parse_question(llm, body.question, body.language)
-        result = await route_question(RouteContext(session, llm, reranker, restaurant.id, parsed))
+        ctx = RouteContext(
+            session,
+            llm,
+            reranker,
+            restaurant.id,
+            parsed,
+            menu_version=restaurant.menu_version,
+            faq_min_similarity=settings.faq_min_similarity,
+            semantic_cache_min_similarity=settings.semantic_cache_min_similarity,
+        )
+        result = await route_question(ctx)
         answer = await answer_question(llm, settings, restaurant.name, result, on_delta)
+        await remember_answer(ctx, answer)  # committed with the query log
         response = ChatResponse.of(answer)
         if trace is not None:
             try:

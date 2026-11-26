@@ -80,7 +80,8 @@ async def test_first_ingest_embeds_everything(
     expected_chunks = len(CURRY["items"]) + len(CURRY["faqs"]) + 1  # + info chunk
     assert result["menu_version"] == 1
     assert result["chunks_embedded"] == expected_chunks
-    assert sum(len(t) for t in _embed_calls(llm)) == expected_chunks
+    # + each FAQ question on its own, for the FAQ route
+    assert sum(len(t) for t in _embed_calls(llm)) == expected_chunks + len(CURRY["faqs"])
 
     async with engine.connect() as conn:
         rows = (

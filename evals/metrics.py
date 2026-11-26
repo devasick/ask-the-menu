@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 Category = Literal[
-    "filter", "semantic", "allergen", "faq", "off_topic", "injection", "cross_tenant"
+    "filter", "semantic", "allergen", "faq", "off_topic", "injection", "cross_tenant", "cache"
 ]
 K = 5
 

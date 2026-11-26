@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     rate_limit_per_ip: int = Field(default=120, ge=1)
     rate_limit_window_s: int = Field(default=3600, ge=1)
 
+    # --- Cache and FAQ routes: cosine similarity needed to answer without generation. ---
+    faq_min_similarity: float = Field(default=0.85, ge=0, le=1)
+    semantic_cache_min_similarity: float = Field(default=0.95, ge=0, le=1)
+
     # Escalate RAG generation from menu-fast to menu-smart for multi-part questions.
     escalate_min_question_marks: int = Field(default=2, ge=1)
     escalate_min_words: int = Field(default=30, ge=1)

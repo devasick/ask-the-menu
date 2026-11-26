@@ -7,7 +7,7 @@ that [MenuNow](https://menunow.de) (a digital menu SaaS) talks to over HTTP, and
 a drop-in React chat widget.
 
 **Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits, budgets,
-injection defense and streaming are done; caching with an FAQ route and a real reranker are next.
+injection defense, streaming, and caching with an FAQ route are done; a real reranker is next.
 
 ## The problem
 
@@ -34,7 +34,9 @@ flowchart LR
     subgraph S[ask-the-menu · FastAPI]
         API[API layer] --> P[Rules-first parser<br/>EN/DE filters]
         P --> R{Route chain}
+        R -- repeat or close paraphrase --> C[Answer cache<br/>exact + semantic]
         R -- pure filter --> SQL[SQL route<br/>templated answer]
+        R -- FAQ question --> F[FAQ route<br/>restaurant's own answer]
         R -- everything else --> H[Hybrid search<br/>pgvector + FTS, RRF]
         H --> RR[Reranker<br/>no-op in MVP]
         RR --> G[Generation<br/>JSON schema, citations]
@@ -45,6 +47,8 @@ flowchart LR
     end
 
     SQL --> PG[(PostgreSQL 16<br/>pgvector)]
+    C --> PG
+    F --> PG
     H --> PG
     LLM --> AN[Anthropic: chat]
     LLM --> OA[OpenAI: embeddings]
@@ -72,23 +76,42 @@ the route taken is logged.
    when it sees a price word it couldn't parse does it ask `menu-fast` for the filters.
    The same pass flags prompt injection attempts (see below), which then go to the
    **blocked route**: a fixed refusal with no retrieval and no model call.
+   A question asked before, ignoring case, spacing and end punctuation, is then answered
+   from the **exact cache** (see Caching below).
 2. **SQL route (no LLM).** A question that is nothing but filters, like "Vegane Currys unter
    15 €", becomes a single SQL query. The answer is a template plus item cards. A third of the
    eval set is answered this way, at zero model cost.
-3. **RAG route.** Everything else runs hybrid retrieval:
+3. **FAQ route and semantic cache (embedding only).** The question is embedded once, and that
+   vector is reused by every later step.
+   - The **FAQ route** compares it with each FAQ *question*, embedded on its own at ingest.
+     At cosine similarity 0.85 or more, and in the FAQ's language, the guest gets the
+     restaurant's own answer, word for word.
+   - The **semantic cache** returns a stored answer to an earlier question at similarity 0.95
+     or more.
+   - Questions with filters or allergens skip both, because "dishes with nuts" and "dishes
+     without nuts" embed close together but need opposite answers. They can only hit the
+     exact cache.
+4. **RAG route.** Everything else runs hybrid retrieval:
    - pgvector cosine search and Postgres full text search (`simple` config, so German and
      English tokens both survive), with any parsed filters applied as SQL `WHERE` clauses
    - the two rankings fused with Reciprocal Rank Fusion (k = 60)
    - the top 20 go through the reranker, and the top 5 go to `menu-fast`
    - multi-part questions escalate to `menu-smart`
-4. **Guardrails.**
+5. **Guardrails.**
    - The model must return JSON (answer, cited item IDs, confidence), validated with one
      retry. If validation fails again, the guest gets the retrieved item cards instead.
    - Citations are filtered to the items that were actually retrieved.
    - For allergen questions, the model only picks the dishes. The allergen sentence itself is
      built in code from stored data, and a disclaimer is always attached.
 
-Phase 2 puts an exact cache, a semantic cache and an FAQ match at the front of the same chain.
+**Caching.** A confident generated answer is stored in Postgres (`answer_cache`) under the
+restaurant's `menu_version`, language and normalized question. Fallback, low-confidence and
+refused answers are never stored. An ingest that changes anything bumps `menu_version` and
+deletes the restaurant's entries, so a price or allergen change is never answered from the
+cache. Both caches live in Postgres rather than Redis: the semantic cache needs pgvector, and
+one table lets the ingest transaction invalidate the cache atomically. The two similarity
+thresholds (`FAQ_MIN_SIMILARITY`, `SEMANTIC_CACHE_MIN_SIMILARITY`) are set conservatively and
+are not yet tuned against a real embedding model.
 
 ## Design decisions
 
@@ -125,7 +148,7 @@ Phase 2 puts an exact cache, a semantic cache and an FAQ match at the front of t
 
 ## Evaluation
 
-`make eval` runs [116 EN/DE guest questions](evals/datasets/curry_house.jsonl) through the
+`make eval` runs [123 EN/DE guest questions](evals/datasets/curry_house.jsonl) through the
 real pipeline:
 
 | Category | Questions |
@@ -133,7 +156,8 @@ real pipeline:
 | filter | 20 |
 | semantic | 28 |
 | allergen | 22 |
-| faq | 14 |
+| faq | 17 |
+| repeats and rewordings (cache) | 4 |
 | off-topic | 7 |
 | prompt injection | 20 |
 | another restaurant's dishes | 5 |
@@ -148,23 +172,23 @@ n/a. To get real numbers, set `LLM_BACKEND=direct` with API keys, then run `make
 `make eval`.
 
 <!-- eval:start -->
-116 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
+123 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
 
 | Metric | Value | n | Gate |
 |---|---|---|---|
 | hit@5 | 79.6% | 49 |  |
-| MRR | 0.745 | 49 |  |
+| MRR | 0.752 | 49 |  |
 | SQL filter exact match | 100.0% | 33 |  |
 | Citation precision | n/a | 51 |  |
-| Route accuracy | 100.0% | 116 |  |
-| Refusal accuracy | n/a | 111 |  |
+| Route accuracy | 100.0% | 123 |  |
+| Refusal accuracy | n/a | 118 |  |
 | Allergen safety | 100.0% | 24 | = 100% ✅ |
 | Injection refusal | 100.0% | 20 | = 100% ✅ |
-| Cross-tenant leakage | 0 | 116 | = 0 ✅ |
-| Answered without generation | 45.7% | 116 |  |
-| Latency p50 | 5 ms | 116 |  |
-| Latency p95 | 9 ms | 116 |  |
-| Avg cost per question | $0.000000 | 116 |  |
+| Cross-tenant leakage | 0 | 123 | = 0 ✅ |
+| Answered without generation | 48.8% | 123 |  |
+| Latency p50 | 7 ms | 123 |  |
+| Latency p95 | 14 ms | 123 |  |
+| Avg cost per question | $0.000000 | 123 |  |
 | Judge faithfulness | n/a | 0 |  |
 <!-- eval:end -->
 
@@ -244,7 +268,7 @@ All bodies are JSON. Errors use FastAPI's `{"detail": ...}` shape.
 
 - `items[].id` is MenuNow's own item ID.
 - `allergens: null` means unknown.
-- `route` is `sql`, `rag` or `blocked` (Phase 2 adds cache and FAQ routes).
+- `route` is one of `blocked`, `exact_cache`, `sql`, `faq`, `semantic_cache` or `rag`.
 - `disclaimer` is set whenever allergens come up.
 
 Errors:
@@ -369,7 +393,7 @@ restaurant.
    - ~~per-session and per-IP rate limits, and enforcement of `monthly_budget_usd`~~ (done)
    - ~~prompt injection detection and output checks~~ (done)
    - ~~streaming answers (SSE) in the API and the widget~~ (done)
-   - exact cache, semantic cache and an FAQ route ahead of RAG
+   - ~~exact cache, semantic cache and an FAQ route ahead of RAG~~ (done)
    - a real cross-encoder reranker behind the existing interface
 3. Eval runs in CI on every PR against a recorded real-model baseline, plus more languages.
 

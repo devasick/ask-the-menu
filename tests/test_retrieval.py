@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.llm.base import Message
-from app.llm.fake import FakeLLMClient
+from app.llm.fake import FakeLLMClient, fake_embedding
 from app.retrieval.hybrid import hybrid_search
 from app.retrieval.query_parser import parse_query
 from app.retrieval.rerank import NoOpReranker
@@ -74,7 +74,8 @@ async def test_hybrid_finds_the_dish_asked_about(seeded: Maker) -> None:
 
 
 async def test_hybrid_retrieves_faqs(seeded: Maker) -> None:
-    result = await _route(seeded, "Do you deliver?")
+    # Not close enough to "Do you deliver?" for the FAQ route, so retrieval answers.
+    result = await _route(seeded, "Do you deliver to my address?")
     assert result.route == "rag"
     assert any(c.source_type == "faq" and "deliver" in c.content for c in result.chunks)
 
@@ -89,7 +90,8 @@ async def test_hybrid_applies_filters_as_where(seeded: Maker) -> None:
 async def test_rag_can_see_sold_out_items_to_say_so(seeded: Maker) -> None:
     parsed = parse_query("goan fish curry with coconut")
     async with seeded() as session:
-        chunks, _ = await hybrid_search(session, FakeLLMClient(), NoOpReranker(), CURRY, parsed)
+        vector = fake_embedding(parsed.question)
+        chunks = await hybrid_search(session, NoOpReranker(), CURRY, parsed, vector)
     goan = next(c for c in chunks if c.item and c.item.external_id == "cu-06")
     assert goan.item is not None and goan.item.is_available is False
 

@@ -17,7 +17,9 @@ from app.retrieval.router import RouteContext, parse_question, route_question
 
 CURRY = uuid.UUID("11111111-1111-4111-8111-111111111111")
 PIZZA = uuid.UUID("22222222-2222-4222-8222-222222222222")
-TENANT_TABLES = re.compile(r"\b(FROM|JOIN)\s+(chunks|menu_items|faqs)\b", re.IGNORECASE)
+TENANT_TABLES = re.compile(
+    r"\b(FROM|JOIN)\s+(chunks|menu_items|faqs|answer_cache)\b", re.IGNORECASE
+)
 
 QUESTIONS = [
     "Chicken Tikka Pizza",  # exists only at the pizzeria, closely matches curry items
