@@ -6,8 +6,8 @@ deliver?". Answers come only from that restaurant's own data. It runs as a stand
 that [MenuNow](https://menunow.de) (a digital menu SaaS) talks to over HTTP, and it ships with
 a drop-in React chat widget.
 
-**Status:** MVP (steps 1 to 7) is complete. Phase 2 (rate limits and budgets, injection
-defense, streaming, caching and an FAQ route, a real reranker) is next.
+**Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits and budgets are
+done; injection defense, streaming, caching with an FAQ route, and a real reranker are next.
 
 ## The problem
 
@@ -40,6 +40,7 @@ flowchart LR
         RR --> G[Generation<br/>JSON schema, citations]
         G --> GR[Guardrails<br/>citations, allergens]
         API --> L[(query_logs)]
+        API --> RD[(Redis<br/>rate limits)]
         API -.-> LLM[app/llm<br/>aliases, fallback, cost]
     end
 
@@ -171,15 +172,22 @@ handles.
   `MODEL_PRICES`. `GET /admin/stats` returns total and average cost per restaurant. A model
   with no configured price logs a warning instead of silently counting as free.
 - **Re-embedding only on change.** Menu syncs embed only the chunks whose text changed.
-- **Phase 2:** each restaurant's `monthly_budget_usd` (already stored) will be enforced, along
-  with per-session rate limits and caching.
+- **Monthly budget with a soft landing.** Once a restaurant's chat cost this calendar month
+  (UTC) reaches its `monthly_budget_usd`, `/chat` switches to search-only mode instead of
+  failing. The guest still gets rules parsing, the SQL route, keyword search, item cards and
+  allergen disclaimers, with no model calls. The same path keeps answers coming when the
+  embedding provider is down.
+- **Rate limits.** Each chat session gets 20 questions per hour by default, and each IP gets
+  120 (guests often share a restaurant's Wi-Fi). Counters live in Redis. Going over returns
+  `429` with `Retry-After`. If Redis is down, requests are allowed and a warning is logged,
+  because the budget still caps spend.
 
 ## Quick start
 
 Requires Docker and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-make up       # app :8000, postgres+pgvector :5432, langfuse :3000 (copies .env.example to .env)
+make up       # app :8000, postgres+pgvector :5432, redis :6379, langfuse :3000 (copies .env.example to .env)
 make seed     # ingests the two fictional demo restaurants from seed/
 curl localhost:8000/health
 
@@ -230,6 +238,8 @@ Errors:
 - **401:** unknown restaurant, missing key or wrong key (one response for all three, so it
   reveals nothing).
 - **422:** invalid body.
+- **429:** too many questions from this session or IP. Wait the number of seconds in
+  `Retry-After`.
 
 ### `POST /ingest/{restaurant_id}` (header `X-API-Key`, ingest key)
 
@@ -306,13 +316,16 @@ restaurant.
    menu.
 5. **Keep the keys server-side.** The ingest and admin keys never reach a browser. Rotate a
    widget key by sending a new one in the next sync.
+6. **Pass the real client IP.** Behind a reverse proxy, set `FORWARDED_ALLOW_IPS` to the
+   proxy's address (uvicorn then reads `X-Forwarded-For`). Without it, every guest appears to
+   come from the proxy and shares one per-IP limit.
 
 ## Roadmap
 
 1. **LiteLLM gateway** in place of direct SDK calls: central retries, fallbacks, per-restaurant
    keys and budgets. See [Migrating to LiteLLM](#migrating-to-litellm).
 2. Phase 2:
-   - per-session and per-restaurant rate limits, and enforcement of `monthly_budget_usd`
+   - ~~per-session and per-IP rate limits, and enforcement of `monthly_budget_usd`~~ (done)
    - prompt injection classifier and output checks
    - streaming answers (SSE) in the API and the widget
    - exact cache, semantic cache and an FAQ route ahead of RAG

@@ -1,8 +1,10 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from redis.asyncio import Redis
 
 from app.api import admin, chat, health, ingest
 from app.config import Settings
@@ -11,6 +13,9 @@ from app.llm import make_llm_client
 from app.llm.base import LLMClient
 from app.llm.tracing import TracingLLMClient, make_langfuse
 from app.retrieval.rerank import NoOpReranker
+from app.security.ratelimit import RateLimiter
+
+log = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -> FastAPI:
@@ -20,7 +25,19 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = make_engine(settings.database_url)
         app.state.sessionmaker = make_sessionmaker(engine)
+        app.state.rate_limiter = None
+        if settings.redis_url:
+            app.state.rate_limiter = RateLimiter(
+                Redis.from_url(settings.redis_url),
+                settings.rate_limit_per_session,
+                settings.rate_limit_per_ip,
+                settings.rate_limit_window_s,
+            )
+        else:
+            log.warning("REDIS_URL is not set: chat rate limits are off")
         yield
+        if app.state.rate_limiter is not None:
+            await app.state.rate_limiter.redis.aclose()
         await engine.dispose()
         if app.state.langfuse is not None:
             app.state.langfuse.shutdown()  # flush pending traces

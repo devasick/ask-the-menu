@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: str = "http://localhost:3000"
 
+    # --- Rate limits (Redis). Off when redis_url is unset. ---
+    redis_url: str | None = None
+    rate_limit_per_session: int = Field(default=20, ge=1)
+    # Guests at one restaurant often share its Wi-Fi IP, so this is well above per-session.
+    rate_limit_per_ip: int = Field(default=120, ge=1)
+    rate_limit_window_s: int = Field(default=3600, ge=1)
+
     # Escalate RAG generation from menu-fast to menu-smart for multi-part questions.
     escalate_min_question_marks: int = Field(default=2, ge=1)
     escalate_min_words: int = Field(default=30, ge=1)
