@@ -68,6 +68,7 @@ class FakeOpenAI:
         self.chat_calls: list[dict[str, Any]] = []
         self.embed_calls: list[dict[str, Any]] = []
         self.dim = 1536
+        self.gemini_shape = False
 
     async def _chat(self, **kwargs: Any) -> Any:
         self.chat_calls.append(kwargs)
@@ -82,6 +83,9 @@ class FakeOpenAI:
         data = [
             SimpleNamespace(index=i, embedding=[float(i)] * self.dim) for i in range(len(input))
         ]
+        if self.gemini_shape:
+            data[0].index = None
+            return SimpleNamespace(data=data[::-1], usage=None)
         return SimpleNamespace(data=data[::-1], usage=SimpleNamespace(prompt_tokens=50))
 
 
@@ -144,6 +148,9 @@ async def test_gemini_embeddings_ask_for_the_column_size() -> None:
     result = await client.embed("menu-embed", ["a"])
     assert gem.embed_calls == [{"model": "gemini-embed", "dimensions": 1536}]
     assert result.model == "gemini-embed" and len(result.vectors[0]) == 1536
+    gem.gemini_shape = True  # what Gemini really returns: index None for item 0, no usage
+    result = await client.embed("menu-embed", ["a", "b", "c"])
+    assert [v[0] for v in result.vectors] == [0.0, 1.0, 2.0] and result.usage.cost_usd == 0
     gem.dim = 3072  # a model that ignores `dimensions` must not reach the vector column
     with pytest.raises(LLMError, match="1536"):
         await client.embed("menu-embed", ["a"])
