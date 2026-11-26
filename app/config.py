@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     llm_backend: Literal["direct", "fake"] = "direct"
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
+    gemini_api_key: SecretStr | None = None
     # Alias -> "<provider>:<model id>". The only place real model IDs live.
     model_menu_fast: str = "anthropic:REPLACE_WITH_FAST_MODEL_ID"
     model_menu_smart: str = "anthropic:REPLACE_WITH_SMART_MODEL_ID"
