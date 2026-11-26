@@ -78,3 +78,18 @@ def test_no_filters_is_never_pure() -> None:
 )
 def test_detect_language(text: str, lang: str) -> None:
     assert detect_language(text) == lang
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "I have a nut allergy. Which starters can I order?",
+        "Ich habe eine Nussallergie.",
+        "Nuss-Allergie, was geht?",
+        "milk intolerance",
+    ],
+)
+def test_allergy_phrases_are_exclusions(question: str) -> None:
+    parsed = parse_query(question)
+    assert parsed.filters.exclude_allergens & {"nuts", "milk"}
+    assert parsed.mentions_allergen
