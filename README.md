@@ -6,8 +6,8 @@ deliver?". Answers come only from that restaurant's own data. It runs as a stand
 that [MenuNow](https://menunow.de) (a digital menu SaaS) talks to over HTTP, and it ships with
 a drop-in React chat widget.
 
-**Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits and budgets are
-done; injection defense, streaming, caching with an FAQ route, and a real reranker are next.
+**Status:** MVP (v0.1.0) is complete. Phase 2 is in progress: rate limits, budgets and
+injection defense are done; streaming, caching with an FAQ route, and a real reranker are next.
 
 ## The problem
 
@@ -70,6 +70,8 @@ the route taken is logged.
    12 Euro"), dietary tags (vegan, glutenfrei, halal, spicy, mild), categories (starters,
    Nachtisch) and allergen exclusions ("without nuts", "Nussallergie", "lactose-free"). Only
    when it sees a price word it couldn't parse does it ask `menu-fast` for the filters.
+   The same pass flags prompt injection attempts (see below), which then go to the
+   **blocked route**: a fixed refusal with no retrieval and no model call.
 2. **SQL route (no LLM).** A question that is nothing but filters, like "Vegane Currys unter
    15 €", becomes a single SQL query. The answer is a template plus item cards. A third of the
    eval set is answered this way, at zero model cost.
@@ -104,31 +106,41 @@ Phase 2 puts an exact cache, a semantic cache and an FAQ match at the front of t
 - **One model interface, aliases only.** App code names `menu-fast`, `menu-smart`,
   `menu-backup` and `menu-embed`, never a model ID. The mapping and prices live in env. Only
   `app/llm/providers.py` may import a provider SDK, and a test enforces that.
-- **Untrusted text stays data.** Menu text and the guest's question go into delimited,
-  HTML-escaped sections of the prompt, and the system prompt says to ignore instructions
-  inside them. Proper injection defense is Phase 2.
+- **Prompt injection defense in layers.**
+  - **Detection before any model call.** A rules-based EN/DE detector
+    (`app/security/injection.py`) catches attempts to override instructions, extract the
+    prompt, change the assistant's role, or fake prompt markup and chat roles ("SYSTEM:",
+    `</question>`, `[INST]`). It normalizes first, so zero-width characters and full-width
+    letters don't hide anything. A guest asking about food never needs these phrasings, and
+    the eval checks that none of its other questions trip the detector.
+  - **Untrusted text stays data.** Menu text and the guest's question go into delimited,
+    HTML-escaped sections of the prompt, and the system prompt says to ignore instructions
+    inside them.
+  - **Output check.** A generated answer that echoes the system prompt is replaced with a
+    refusal. Citations were already limited to retrieved items, and allergen text is built in
+    code.
 - **Offline by default in tests.** `LLM_BACKEND=fake` swaps in deterministic hashed
   embeddings and a scripted model. The test suite and an offline eval run need no keys and
   never call a paid API.
 
 ## Evaluation
 
-`make eval` runs [100 EN/DE guest questions](evals/datasets/curry_house.jsonl) through the
+`make eval` runs [116 EN/DE guest questions](evals/datasets/curry_house.jsonl) through the
 real pipeline:
 
 | Category | Questions |
 |---|---|
 | filter | 20 |
-| semantic | 27 |
+| semantic | 28 |
 | allergen | 22 |
-| faq | 13 |
+| faq | 14 |
 | off-topic | 7 |
-| prompt injection | 6 |
+| prompt injection | 20 |
 | another restaurant's dishes | 5 |
 
 It writes [evals/results/latest.md](evals/results/latest.md), with a per-category breakdown
-and every case worth a look, and the table below. The run fails if allergen safety is below
-100% or anything leaks across tenants. `make eval ARGS=--judge` adds an LLM-as-judge
+and every case worth a look, and the table below. The run fails if allergen safety or injection
+refusal is below 100%, or if anything leaks across tenants. `make eval ARGS=--judge` adds an LLM-as-judge
 faithfulness score from `menu-smart`.
 
 The committed numbers come from the offline backend, so metrics that need a real model show
@@ -136,22 +148,23 @@ n/a. To get real numbers, set `LLM_BACKEND=direct` with API keys, then run `make
 `make eval`.
 
 <!-- eval:start -->
-100 questions, 2026-11-25, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
+116 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
 
 | Metric | Value | n | Gate |
 |---|---|---|---|
-| hit@5 | 80.0% | 50 |  |
-| MRR | 0.770 | 50 |  |
+| hit@5 | 79.6% | 49 |  |
+| MRR | 0.745 | 49 |  |
 | SQL filter exact match | 100.0% | 33 |  |
-| Citation precision | n/a | 54 |  |
-| Route accuracy | 100.0% | 100 |  |
-| Refusal accuracy | n/a | 97 |  |
+| Citation precision | n/a | 51 |  |
+| Route accuracy | 100.0% | 116 |  |
+| Refusal accuracy | n/a | 111 |  |
 | Allergen safety | 100.0% | 24 | = 100% ✅ |
-| Cross-tenant leakage | 0 | 100 | = 0 ✅ |
-| Answered without generation | 33.0% | 100 |  |
-| Latency p50 | 4 ms | 100 |  |
-| Latency p95 | 6 ms | 100 |  |
-| Avg cost per question | $0.000000 | 100 |  |
+| Injection refusal | 100.0% | 20 | = 100% ✅ |
+| Cross-tenant leakage | 0 | 116 | = 0 ✅ |
+| Answered without generation | 45.7% | 116 |  |
+| Latency p50 | 5 ms | 116 |  |
+| Latency p95 | 9 ms | 116 |  |
+| Avg cost per question | $0.000000 | 116 |  |
 | Judge faithfulness | n/a | 0 |  |
 <!-- eval:end -->
 
@@ -326,7 +339,7 @@ restaurant.
    keys and budgets. See [Migrating to LiteLLM](#migrating-to-litellm).
 2. Phase 2:
    - ~~per-session and per-IP rate limits, and enforcement of `monthly_budget_usd`~~ (done)
-   - prompt injection classifier and output checks
+   - ~~prompt injection detection and output checks~~ (done)
    - streaming answers (SSE) in the API and the widget
    - exact cache, semantic cache and an FAQ route ahead of RAG
    - a real cross-encoder reranker behind the existing interface

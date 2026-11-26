@@ -13,6 +13,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Literal
 
+from app.security.injection import detect_injection
+
 Language = Literal["en", "de"]
 
 # --- vocabularies -------------------------------------------------------------------------
@@ -185,7 +187,8 @@ GERMAN_HINTS = frozenset(
     """
     ist was welche welcher welches gibt habt ihr und ohne unter bis mit für nicht keine kein
     gerichte gericht speisen etwas zeig zeige bitte enthält vegetarisch glutenfrei scharf
-    nachtisch getränke vorspeisen haben sie der die das ein eine wann wie
+    nachtisch getränke vorspeisen haben sie der die das ein eine wann wie mir mich dir deine
+    deinen alle auch noch
     """.split()
 )
 
@@ -221,6 +224,8 @@ class ParsedQuery:
     semantic_terms: tuple[str, ...] = field(default_factory=tuple)
     # Price-like words we could not parse: the LLM parser may be worth a try.
     rules_incomplete: bool = False
+    # Kind of prompt injection detected (app/security/injection.py), if any.
+    injection: str | None = None
 
     @property
     def is_pure_filter(self) -> bool:
@@ -283,6 +288,7 @@ def parse_query(question: str, language: Language | None = None) -> ParsedQuery:
         mentions_allergen=bool(mentioned or excluded or ALLERGY_WORDS.search(text)),
         semantic_terms=semantic,
         rules_incomplete=max_price is None and bool(PRICE_CUE.search(text)),
+        injection=detect_injection(question),
     )
 
 

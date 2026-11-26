@@ -15,6 +15,7 @@ from app.llm.aliases import Alias
 from app.llm.base import LLMClient, LLMError, Message, Usage
 from app.retrieval.router import Route, RouteResult
 from app.retrieval.sql_search import ItemHit
+from app.security.injection import REFUSAL_TEXT, leaks_system_prompt
 
 log = logging.getLogger(__name__)
 MAX_ATTEMPTS = 2  # one retry on invalid output
@@ -123,6 +124,20 @@ async def answer_question(
             confidence="low",
             usage=usage,
             generated=False,
+            model_alias=answered_by,
+        )
+
+    if leaks_system_prompt(generated.answer):
+        log.warning("generated answer echoed the system prompt; refusing")
+        return ChatAnswer(
+            answer=REFUSAL_TEXT[lang],
+            items=[],
+            route=result.route,
+            sources=[],
+            disclaimer=None,
+            confidence="low",
+            usage=usage,
+            generated=True,
             model_alias=answered_by,
         )
 

@@ -28,7 +28,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 EMBEDDING_DIM = 1536
 
 SOURCE_TYPES = ("menu_item", "faq", "info")
-ROUTES = ("exact_cache", "semantic_cache", "sql", "faq", "rag")
+ROUTES = ("blocked", "exact_cache", "semantic_cache", "sql", "faq", "rag")
 
 
 class Base(DeclarativeBase):
@@ -146,7 +146,7 @@ class QueryLog(Base):
     __tablename__ = "query_logs"
     __table_args__ = (
         CheckConstraint(
-            "route_taken IN ('exact_cache', 'semantic_cache', 'sql', 'faq', 'rag')",
+            "route_taken IN ('blocked', 'exact_cache', 'semantic_cache', 'sql', 'faq', 'rag')",
             name="ck_query_logs_route",
         ),
         Index("ix_query_logs_restaurant_created", "restaurant_id", "created_at"),

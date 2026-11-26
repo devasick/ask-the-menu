@@ -22,9 +22,10 @@ from app.retrieval.hybrid import RetrievedChunk, hybrid_search
 from app.retrieval.query_parser import Language, ParsedQuery, parse_query
 from app.retrieval.rerank import Reranker
 from app.retrieval.sql_search import ItemHit, search_items
+from app.security.injection import REFUSAL_TEXT
 
 log = logging.getLogger(__name__)
-Route = Literal["exact_cache", "semantic_cache", "faq", "sql", "rag"]
+Route = Literal["blocked", "exact_cache", "semantic_cache", "faq", "sql", "rag"]
 NO_USAGE = Usage(0, 0, Decimal(0))
 
 
@@ -51,6 +52,14 @@ class RouteResult:
 RouteHandler = Callable[[RouteContext], Awaitable[RouteResult | None]]
 
 
+async def blocked_route(ctx: RouteContext) -> RouteResult | None:
+    """Prompt injection attempts get a fixed refusal: no retrieval, no model call."""
+    if ctx.parsed.injection is None:
+        return None
+    log.info("blocked prompt injection (%s)", ctx.parsed.injection)
+    return RouteResult(route="blocked", parsed=ctx.parsed, answer=REFUSAL_TEXT[ctx.parsed.language])
+
+
 async def sql_route(ctx: RouteContext) -> RouteResult | None:
     if not ctx.parsed.is_pure_filter:
         return None
@@ -67,7 +76,7 @@ async def rag_route(ctx: RouteContext) -> RouteResult:
     return RouteResult(route="rag", parsed=ctx.parsed, items=items, chunks=chunks, usage=usage)
 
 
-MVP_CHAIN: tuple[RouteHandler, ...] = (sql_route, rag_route)
+MVP_CHAIN: tuple[RouteHandler, ...] = (blocked_route, sql_route, rag_route)
 
 
 async def route_question(
@@ -114,7 +123,7 @@ async def parse_question(
 ) -> tuple[ParsedQuery, Usage]:
     """Rules first. Only when they spot a price cue they could not parse, ask `menu-fast`."""
     parsed = parse_query(question, language)
-    if not parsed.rules_incomplete:
+    if not parsed.rules_incomplete or parsed.injection:
         return parsed, NO_USAGE
     try:
         result = await llm.chat(
