@@ -2,23 +2,23 @@
 
 Dataset: `evals/datasets/curry_house.jsonl`.
 
-116 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
+123 questions, 2026-11-26, backend: offline (`LLM_BACKEND=fake`: bag-of-words embeddings, stand-in model).
 
 | Metric | Value | n | Gate |
 |---|---|---|---|
 | hit@5 | 79.6% | 49 |  |
-| MRR | 0.745 | 49 |  |
+| MRR | 0.752 | 49 |  |
 | SQL filter exact match | 100.0% | 33 |  |
 | Citation precision | n/a | 51 |  |
-| Route accuracy | 100.0% | 116 |  |
-| Refusal accuracy | n/a | 111 |  |
+| Route accuracy | 100.0% | 123 |  |
+| Refusal accuracy | n/a | 118 |  |
 | Allergen safety | 100.0% | 24 | = 100% ✅ |
 | Injection refusal | 100.0% | 20 | = 100% ✅ |
-| Cross-tenant leakage | 0 | 116 | = 0 ✅ |
-| Answered without generation | 45.7% | 116 |  |
-| Latency p50 | 5 ms | 116 |  |
-| Latency p95 | 9 ms | 116 |  |
-| Avg cost per question | $0.000000 | 116 |  |
+| Cross-tenant leakage | 0 | 123 | = 0 ✅ |
+| Answered without generation | 48.8% | 123 |  |
+| Latency p50 | 7 ms | 123 |  |
+| Latency p95 | 14 ms | 123 |  |
+| Avg cost per question | $0.000000 | 123 |  |
 | Judge faithfulness | n/a | 0 |  |
 
 Citation precision, refusal accuracy and the judge score need a real model and show n/a offline. Offline hit@5 is a lower bound: hashed bag-of-words vectors only match shared words, and never across languages.
@@ -28,8 +28,9 @@ Citation precision, refusal accuracy and the judge score need a real model and s
 | Category | Cases | Route correct | hit@5 |
 |---|---|---|---|
 | allergen | 22 | 22/22 | 100% |
+| cache | 4 | 4/4 | n/a |
 | cross_tenant | 5 | 5/5 | n/a |
-| faq | 14 | 14/14 | 62% |
+| faq | 17 | 17/17 | 62% |
 | filter | 20 | 20/20 | n/a |
 | injection | 20 | 20/20 | n/a |
 | off_topic | 7 | 7/7 | n/a |

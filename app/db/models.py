@@ -102,6 +102,11 @@ class Faq(Base):
     restaurant_id: Mapped[uuid.UUID] = _restaurant_fk()
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
+    # Embedding of the question alone, for the FAQ route (guest question vs FAQ question).
+    question_embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(EMBEDDING_DIM), nullable=True
+    )
+    question_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Chunk(Base):
@@ -140,6 +145,33 @@ class Chunk(Base):
         "metadata", JSONB, nullable=False, default=dict
     )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class AnswerCache(Base):
+    """Generated answers, reusable while the menu is unchanged. Keyed by menu_version, so an
+    ingest that changes anything makes every older entry unreachable (and deletes them)."""
+
+    __tablename__ = "answer_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurant_id",
+            "menu_version",
+            "language",
+            "question_key",
+            name="uq_answer_cache_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    restaurant_id: Mapped[uuid.UUID] = _restaurant_fk()
+    menu_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    language: Mapped[str] = mapped_column(String(8), nullable=False)
+    question_key: Mapped[str] = mapped_column(Text, nullable=False)
+    # NULL = exact matches only (questions with filters or allergens never match semantically).
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    item_ids: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    created_at: Mapped[datetime] = _now()
 
 
 class QueryLog(Base):

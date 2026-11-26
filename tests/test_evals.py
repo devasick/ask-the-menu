@@ -44,6 +44,7 @@ def test_dataset_is_big_enough_and_references_real_items() -> None:
         "off_topic",
         "injection",
         "cross_tenant",
+        "cache",
     }
     known = _seed_ids()
     assert all(set(c.expected_item_ids) <= known for c in cases)

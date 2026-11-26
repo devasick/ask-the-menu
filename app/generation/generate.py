@@ -14,7 +14,8 @@ from app.generation.stream import OnDelta, stream_reply
 from app.generation.templates import ALLERGEN_DISCLAIMER
 from app.llm.aliases import Alias
 from app.llm.base import LLMClient, LLMError, Message, Usage
-from app.retrieval.router import Route, RouteResult
+from app.retrieval import answer_cache
+from app.retrieval.router import Route, RouteContext, RouteResult
 from app.retrieval.sql_search import ItemHit
 from app.security.injection import REFUSAL_TEXT, leaks_system_prompt
 
@@ -56,6 +57,22 @@ class ChatAnswer:
     model_alias: Alias | None = None
 
 
+async def remember_answer(ctx: RouteContext, answer: ChatAnswer) -> None:
+    """Caches a confident generated answer in the caller's transaction. Low-confidence,
+    fallback and refused answers are not reused."""
+    if answer.route != "rag" or not answer.generated or answer.confidence != "high":
+        return
+    vector = (await ctx.question_embedding())[0] if ctx.matches_semantically else None
+    await answer_cache.store(
+        ctx.session,
+        ctx.cache_key,
+        ctx.parsed.question,
+        vector,
+        answer.answer,
+        [i.external_id for i in answer.items],
+    )
+
+
 def add_usage(a: Usage, b: Usage) -> Usage:
     return Usage(a.tokens_in + b.tokens_in, a.tokens_out + b.tokens_out, a.cost_usd + b.cost_usd)
 
@@ -73,12 +90,13 @@ async def answer_question(
     lang = parsed.language
     disclaimer = ALLERGEN_DISCLAIMER[lang] if parsed.mentions_allergen else None
 
-    if result.answer is not None:  # SQL route (and later cache/FAQ routes): no generation call
+    if result.answer is not None:  # blocked, cache, SQL and FAQ routes: no generation call
         return ChatAnswer(
             answer=result.answer,
             items=result.items,
             route=result.route,
-            sources=[Source("menu_item", i.external_id) for i in result.items],
+            sources=[Source("menu_item", i.external_id) for i in result.items]
+            + [Source(c.source_type, str(c.chunk_id)) for c in result.chunks],
             disclaimer=disclaimer,
             # An empty SQL listing is a "no result"; cache/FAQ answers stand without items.
             confidence="high" if result.items or result.route != "sql" else "low",
