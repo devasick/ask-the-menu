@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     faq_min_similarity: float = Field(default=0.85, ge=0, le=1)
     semantic_cache_min_similarity: float = Field(default=0.95, ge=0, le=1)
 
+    # --- Reranker: "none" keeps the fused order; "cross-encoder" needs the rerank extra. ---
+    reranker: Literal["none", "cross-encoder"] = "none"
+    # Multilingual (EN/DE) MS MARCO cross-encoder, Apache-2.0, ~120M parameters, fine on CPU.
+    reranker_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+
     # Escalate RAG generation from menu-fast to menu-smart for multi-part questions.
     escalate_min_question_marks: int = Field(default=2, ge=1)
     escalate_min_words: int = Field(default=30, ge=1)

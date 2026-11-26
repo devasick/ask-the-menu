@@ -34,7 +34,7 @@ from app.llm.aliases import Alias
 from app.llm.base import LLMClient, Message
 from app.llm.fake import FakeLLMClient
 from app.retrieval.hybrid import RetrievedChunk
-from app.retrieval.rerank import NoOpReranker
+from app.retrieval.rerank import Reranker, make_reranker
 from app.retrieval.router import RouteContext, RouteResult, parse_question, route_question
 from app.seed import load_payload
 from evals.metrics import (
@@ -169,6 +169,7 @@ async def judge(
 async def run_case(
     sm: async_sessionmaker[AsyncSession],
     llm: LLMClient,
+    reranker: Reranker,
     settings: Settings,
     restaurant: Restaurant,
     owned: Owned,
@@ -181,7 +182,7 @@ async def run_case(
         ctx = RouteContext(
             session,
             llm,
-            NoOpReranker(),
+            reranker,
             restaurant.id,
             parsed,
             menu_version=restaurant.menu_version,
@@ -228,6 +229,7 @@ async def run_eval(
         raise SystemExit("--judge needs a real model: set LLM_BACKEND=direct and API keys")
     cases = load_dataset(dataset)
     llm = make_eval_llm(settings)
+    reranker = make_reranker(settings)
     engine = make_engine(settings.database_url)
     try:
         sm = make_sessionmaker(engine)
@@ -244,7 +246,8 @@ async def run_eval(
             assert restaurant is not None
             owned = await load_owned(session, CURRY_HOUSE)
         results = [
-            await run_case(sm, llm, settings, restaurant, owned, case, use_judge) for case in cases
+            await run_case(sm, llm, reranker, settings, restaurant, owned, case, use_judge)
+            for case in cases
         ]
     finally:
         await engine.dispose()
@@ -291,9 +294,10 @@ def summary_table(settings: Settings, llm: LLMClient, results: list[CaseResult])
         else f"`{llm.model_id('menu-fast')}` / `{llm.model_id('menu-smart')}`, "
         f"embeddings `{llm.model_id('menu-embed')}`"
     )
+    reranker = "none" if settings.reranker == "none" else f"`{settings.reranker_model}`"
     return (
-        f"{len(results)} questions, {datetime.now(UTC):%Y-%m-%d}, backend: {backend}.\n\n"
-        + metrics_table(aggregate(results, model_metrics))
+        f"{len(results)} questions, {datetime.now(UTC):%Y-%m-%d}, backend: {backend}, "
+        f"reranker: {reranker}.\n\n" + metrics_table(aggregate(results, model_metrics))
     )
 
 
