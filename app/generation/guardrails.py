@@ -38,8 +38,11 @@ def validate_citations(cited: list[str], allowed: list[str]) -> list[str]:
 
 
 def allergen_answer(items: list[ItemHit], lang: Language) -> str:
-    """Allergen facts built only from the stored allergens field, never from model text."""
+    """Allergen facts built only from the stored allergens field, never from model text.
+
+    Items without data share one "ask staff" sentence instead of repeating it per item."""
     lines = []
+    unknown = []
     for item in items:
         if has_allergen_data(item.allergens):
             names = (
@@ -52,11 +55,14 @@ def allergen_answer(items: list[ItemHit], lang: Language) -> str:
                 else f"According to our menu, {item.name} contains: {joined}."
             )
         else:
-            lines.append(
-                f"Für {item.name} liegen keine Allergenangaben vor, bitte frag unser Personal."
-                if lang == "de"
-                else f"Allergen information for {item.name} is not available, please ask our staff."
-            )
+            unknown.append(item.name)
+    if unknown:
+        listed = _join(unknown, lang)
+        lines.append(
+            f"Für {listed} liegen keine Allergenangaben vor, bitte frag unser Personal."
+            if lang == "de"
+            else f"We don't have allergen information for {listed}, please ask our staff."
+        )
     if not lines:
         return (
             "Dazu habe ich keine Allergenangaben, bitte frag unser Personal."
@@ -64,6 +70,13 @@ def allergen_answer(items: list[ItemHit], lang: Language) -> str:
             else "I don't have allergen information for that, please ask our staff."
         )
     return " ".join(lines)
+
+
+def _join(names: list[str], lang: Language) -> str:
+    """'A', 'A and B', 'A, B and C' (German: 'und')."""
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + (" und " if lang == "de" else " and ") + names[-1]
 
 
 def is_multi_part(question: str, min_questions: int, min_words: int) -> bool:

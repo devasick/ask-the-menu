@@ -81,8 +81,10 @@ def test_faq_needs_a_close_match(client: TestClient) -> None:
 
 
 def test_faq_is_not_answered_in_another_language(client: TestClient) -> None:
-    # Same words, so the vectors match, but the guest wants German and the FAQ is English.
-    assert ask(client, "What are your opening hours?", language="de")["route"] != "faq"
+    # The FAQ is English. A clearly English question on a German page is still English...
+    assert ask(client, "What are your opening hours?", language="de")["route"] == "faq"
+    # ...but an ambiguous one follows the page language, and gets no English FAQ.
+    assert ask(client, "Opening hours", language="de")["route"] != "faq"
 
 
 def test_repeat_question_comes_from_the_exact_cache(client: TestClient, llm: FakeLLMClient) -> None:

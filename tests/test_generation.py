@@ -122,6 +122,17 @@ def test_prompt_delimits_and_escapes_untrusted_text() -> None:
     assert "German" in system_prompt("X", "de") and "English" in system_prompt("X", "en")
 
 
+def test_unknown_allergens_are_mentioned_once() -> None:
+    items = [BHAJI, KHEER, KORMA]
+    text = allergen_answer(items, "en")
+    assert text.count("please ask our staff") == 1
+    assert f"information for {BHAJI.name} and {KHEER.name}, please" in text  # grouped
+    assert "Chicken Korma contains: milk, nuts." in text
+    de = allergen_answer([BHAJI, KHEER], "de")
+    assert de.startswith(f"Für {BHAJI.name} und {KHEER.name} liegen keine Allergenangaben vor")
+    assert de.count("Personal") == 1
+
+
 def test_guardrail_helpers() -> None:
     assert validate_citations(["b", "x", "a", "b"], ["a", "b"]) == ["b", "a"]
     assert allergen_answer([], "en").startswith("I don't have allergen information")

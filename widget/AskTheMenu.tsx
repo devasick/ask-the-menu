@@ -279,7 +279,12 @@ function MessageView({ message, language }: { message: Message; language: Langua
       {reply.items.length > 0 && (
         <ul className="atm-cards">
           {reply.items.map((item) => (
-            <ItemCardView key={item.id} item={item} language={language} />
+            <ItemCardView
+              key={item.id}
+              item={item}
+              language={language}
+              askedAllergens={Boolean(reply.disclaimer)}
+            />
           ))}
         </ul>
       )}
@@ -288,7 +293,15 @@ function MessageView({ message, language }: { message: Message; language: Langua
   );
 }
 
-function ItemCardView({ item, language }: { item: ItemCard; language: Language }) {
+function ItemCardView({
+  item,
+  language,
+  askedAllergens,
+}: {
+  item: ItemCard;
+  language: Language;
+  askedAllergens: boolean;
+}) {
   const t = TEXT[language];
   const names = ALLERGEN_NAMES[language];
   return (
@@ -299,9 +312,11 @@ function ItemCardView({ item, language }: { item: ItemCard; language: Language }
       </div>
       {!item.available && <span className="atm-badge atm-badge-warn">{t.soldOut}</span>}
       <div className="atm-badges" aria-label={t.allergens}>
-        {/* The API sends null for unknown; an empty list is treated the same, never as safe. */}
+        {/* The API sends null for unknown; an empty list is treated the same, never as safe.
+            "Unknown" shows per item only when the guest asked about allergens (the API then
+            sends a disclaimer); otherwise it would repeat on every card. */}
         {!item.allergens?.length ? (
-          <span className="atm-badge atm-badge-warn">{t.allergensUnknown}</span>
+          askedAllergens && <span className="atm-badge atm-badge-warn">{t.allergensUnknown}</span>
         ) : (
           item.allergens.map((a) => (
             <span key={a} className="atm-badge atm-badge-allergen">
