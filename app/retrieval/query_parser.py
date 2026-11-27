@@ -188,7 +188,14 @@ GERMAN_HINTS = frozenset(
     ist was welche welcher welches gibt habt ihr und ohne unter bis mit für nicht keine kein
     gerichte gericht speisen etwas zeig zeige bitte enthält vegetarisch glutenfrei scharf
     nachtisch getränke vorspeisen haben sie der die das ein eine wann wie mir mich dir deine
-    deinen alle auch noch
+    deinen alle auch noch zu einem einen einer gut passt passen empfiehlst empfehlen
+    """.split()
+)
+
+ENGLISH_HINTS = frozenset(
+    """
+    what which is are do does you have has any the and with without for of under
+    recommend goes good there your
     """.split()
 )
 
@@ -236,13 +243,20 @@ def normalize_question(text: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFC", text).lower()).strip()
 
 
-def detect_language(text: str) -> Language:
+def detect_language(text: str, fallback: Language | None = None) -> Language:
+    """The question's own language when it shows one, else `fallback` (the page language),
+    else English. Guests get answers in the language they wrote in."""
     norm = normalize_question(text)
     if re.search(r"[äöüß]", norm):
         return "de"
     words = _WORD.findall(norm)
     german = sum(w in GERMAN_HINTS for w in words)
-    return "de" if german and german * 3 >= len(words) else "en"
+    english = sum(w in ENGLISH_HINTS for w in words)
+    if german and german * 3 >= len(words) and german >= english:
+        return "de"
+    if english or fallback is None:
+        return "en"
+    return fallback
 
 
 def parse_query(question: str, language: Language | None = None) -> ParsedQuery:
@@ -283,7 +297,7 @@ def parse_query(question: str, language: Language | None = None) -> ParsedQuery:
     )
     return ParsedQuery(
         question=question,
-        language=language or detect_language(question),
+        language=detect_language(question, fallback=language),
         filters=filters,
         mentions_allergen=bool(mentioned or excluded or ALLERGY_WORDS.search(text)),
         semantic_terms=semantic,

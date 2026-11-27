@@ -67,10 +67,10 @@ def filter_answer(filters: QueryFilters, count: int, lang: Language) -> str:
     summary = describe_filters(filters, lang)
     if lang == "de":
         if count == 0:
-            return f"Leider passt nichts auf unserer Karte zu: {summary}."
-        noun = "passendes Gericht" if count == 1 else "passende Gerichte"
+            return f"Dazu habe ich leider nichts auf unserer Karte gefunden ({summary})."
+        noun = "passenden Eintrag" if count == 1 else "passende Einträge"
         return f"Ich habe {count} {noun} gefunden ({summary})."
     if count == 0:
-        return f"Sorry, nothing on our menu matches: {summary}."
-    noun = "matching dish" if count == 1 else "matching dishes"
+        return f"Sorry, I couldn't find anything on our menu for that ({summary})."
+    noun = "matching item" if count == 1 else "matching items"
     return f"I found {count} {noun} ({summary})."

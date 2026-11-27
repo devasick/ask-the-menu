@@ -81,6 +81,20 @@ def test_detect_language(text: str, lang: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "page", "lang"),
+    [
+        ("Was passt gut zu einem Cappuccino?", "en", "de"),  # the question wins
+        ("What is in a Chai Latte?", "de", "en"),
+        ("Cappuccino?", "de", "de"),  # nothing to go on: the page language
+        ("Cappuccino?", "en", "en"),
+    ],
+)
+def test_question_language_beats_the_page_language(text: str, page: str, lang: str) -> None:
+    assert detect_language(text, fallback=page) == lang  # type: ignore[arg-type]
+    assert parse_query(text, page).language == lang  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
     "question",
     [
         "I have a nut allergy. Which starters can I order?",

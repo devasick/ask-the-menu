@@ -62,7 +62,7 @@ async def test_empty_filter_result_says_so(seeded: Maker) -> None:
     result = await _route(seeded, "vegan desserts under €2")
     assert result.route == "sql"
     assert result.items == []
-    assert result.answer is not None and "nothing" in result.answer
+    assert result.answer is not None and "couldn't find anything" in result.answer
 
 
 async def test_hybrid_finds_the_dish_asked_about(seeded: Maker) -> None:
